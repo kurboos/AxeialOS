@@ -2,3 +2,5 @@
 .qodo/
 .build/
 Repository.sh
+Fix.sh
+debug.log

@@ -2,9 +2,11 @@
 
 #include <AllTypes.h>
 #include <BootConsole.h>
+/*For Spinlocks*/
+#include <Sync.h>
 
 /*Uncomment for Debug Output*/
-#define DEBUG
+//#define DEBUG
 
 /**
  * PrintfState (Pretty much optional)
@@ -19,6 +21,24 @@ struct
     int 		ArgIndex;
 
 }PrintfState;
+
+/**
+ * Format Flags
+ */
+typedef struct
+{
+
+    int LeftAlign;
+    int ShowSign;
+    int SpacePrefix;
+    int AlternateForm;
+    int ZeroPad;
+    int Width;
+    int Precision;
+    int HasPrecision;
+    int Length;
+	
+} FormatFlags;
 
 /**
  * Logging colors
@@ -63,6 +83,12 @@ int StringLength(const char *__String__);
 void ReverseString(char *__String__, int __Length__);
 void IntegerToString(int __Value__, char *__Buffer__, int __Base__);
 void UnsignedToString(uint32_t __Value__, char *__Buffer__, int __Base__);
+void ProcessInteger(__builtin_va_list *__Args__, FormatFlags *__Flags__, int __Base__, int __Signed__);
+void ProcessString(__builtin_va_list *__Args__, FormatFlags *__Flags__);
+void ProcessChar(__builtin_va_list *__Args__, FormatFlags *__Flags__);
+void ProcessPointer(__builtin_va_list *__Args__, FormatFlags *__Flags__);
+void FormatOutput(const char *__Buffer__, FormatFlags *__Flags__, int __IsNegative__, int __Base__);
+void UnsignedToStringEx(uint64_t __Value__, char *__Buffer__, int __Base__, int __Uppercase__);
 
 /*Logging*/
 void PError(const char *__Format__, ...);

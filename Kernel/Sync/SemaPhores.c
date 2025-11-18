@@ -1,5 +1,5 @@
-#include <Sync.h>   /* Synchronization primitives definitions */
-#include <SMP.h>    /* Symmetric multiprocessing functions */
+#include <SMP.h>  /* Symmetric multiprocessing functions */
+#include <Sync.h> /* Synchronization primitives definitions */
 
 /**
  * @brief Initialize a semaphore.
@@ -16,10 +16,10 @@
 void
 InitializeSemaphore(Semaphore* __Semaphore__, int32_t __InitialCount__, const char* __Name__)
 {
-    __Semaphore__->Count = __InitialCount__;        /* Set initial count */
-    __Semaphore__->WaitQueue = 0;                   /* No waiting threads initially */
-    InitializeSpinLock(&__Semaphore__->QueueLock, "SemaphoreQueue");  /* Initialize queue lock */
-    __Semaphore__->Name = __Name__;                 /* Assign name for debugging */
+    __Semaphore__->Count     = __InitialCount__; /* Set initial count */
+    __Semaphore__->WaitQueue = 0;                /* No waiting threads initially */
+    InitializeSpinLock(&__Semaphore__->QueueLock, "SemaphoreQueue"); /* Initialize queue lock */
+    __Semaphore__->Name = __Name__;                                  /* Assign name for debugging */
 }
 
 /**
@@ -36,16 +36,20 @@ AcquireSemaphore(Semaphore* __Semaphore__)
 {
     while (1)
     {
-        
+
         int32_t CurrentCount = __atomic_load_n(&__Semaphore__->Count, __ATOMIC_ACQUIRE);
 
         if (CurrentCount > 0)
         {
-            
-            if (__atomic_compare_exchange_n(&__Semaphore__->Count, &CurrentCount,
-                CurrentCount - 1, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+
+            if (__atomic_compare_exchange_n(&__Semaphore__->Count,
+                                            &CurrentCount,
+                                            CurrentCount - 1,
+                                            false,
+                                            __ATOMIC_ACQUIRE,
+                                            __ATOMIC_RELAXED))
             {
-                break;  /* Successfully acquired */
+                break; /* Successfully acquired */
             }
             /* Compare-exchange failed, retry */
         }
@@ -67,7 +71,7 @@ AcquireSemaphore(Semaphore* __Semaphore__)
 void
 ReleaseSemaphore(Semaphore* __Semaphore__)
 {
-    
+
     __atomic_fetch_add(&__Semaphore__->Count, 1, __ATOMIC_RELEASE);
 }
 
@@ -83,16 +87,20 @@ ReleaseSemaphore(Semaphore* __Semaphore__)
 bool
 TryAcquireSemaphore(Semaphore* __Semaphore__)
 {
-    
+
     int32_t CurrentCount = __atomic_load_n(&__Semaphore__->Count, __ATOMIC_ACQUIRE);
 
     if (CurrentCount > 0)
     {
-        
-        if (__atomic_compare_exchange_n(&__Semaphore__->Count, &CurrentCount,
-            CurrentCount - 1, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+
+        if (__atomic_compare_exchange_n(&__Semaphore__->Count,
+                                        &CurrentCount,
+                                        CurrentCount - 1,
+                                        false,
+                                        __ATOMIC_ACQUIRE,
+                                        __ATOMIC_RELAXED))
         {
-            return true;  /* Successfully acquired */
+            return true; /* Successfully acquired */
         }
     }
 

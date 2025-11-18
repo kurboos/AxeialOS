@@ -1,6 +1,6 @@
 #include <BootImg.h>
-#include <String.h>
 #include <RamFs.h>
+#include <String.h>
 #include <VFS.h>
 
 /**
@@ -26,14 +26,15 @@ InitializeBootImage(void)
 
     for (uint64_t I = 0; I < LimineMod.response->module_count; I++)
     {
-        struct limine_file *Mod = LimineMod.response->modules[I];
+        struct limine_file* Mod = LimineMod.response->modules[I];
         if (!Mod || !Mod->path)
+        {
             continue;
+        }
 
         if (strcmp(Mod->path, "/BootImg.img") == 0)
         {
-            PDebug("RamFS: Found BootImg.img at %p, size %llu bytes\n",
-                   Mod->address, Mod->size);
+            PDebug("RamFS: Found BootImg.img at %p, size %llu bytes\n", Mod->address, Mod->size);
 
             /* Hand off to BootMountRamFs to wire into VFS */
             return BootMountRamFs(Mod->address, Mod->size);

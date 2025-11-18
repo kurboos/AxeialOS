@@ -1,11 +1,11 @@
 #include <AllTypes.h>
-#include <VFS.h>
-#include <KrnPrintf.h>
 #include <KHeap.h>
-#include <String.h>
-#include <ModMemMgr.h>
-#include <ModELF.h>
 #include <KMods.h>
+#include <KrnPrintf.h>
+#include <ModELF.h>
+#include <ModMemMgr.h>
+#include <String.h>
+#include <VFS.h>
 
 /**
  * @brief Install an ELF module
@@ -19,7 +19,7 @@
  * @return 0 on success, -1 on failure
  */
 int
-InstallModule(const char *__Path__)
+InstallModule(const char* __Path__)
 {
     if (!__Path__)
     {
@@ -27,20 +27,19 @@ InstallModule(const char *__Path__)
         return -1;
     }
 
-    static uint8_t ZeroStub[1] = { 0 };
+    static uint8_t ZeroStub[1] = {0};
 
     Elf64_Ehdr Hdr;
-    long HdrLen = 0;
+    long       HdrLen = 0;
 
-    if (VfsReadAll(__Path__, &Hdr, (long)sizeof(Hdr), &HdrLen) != 0 ||
-        HdrLen < (long)sizeof(Hdr))
+    if (VfsReadAll(__Path__, &Hdr, (long)sizeof(Hdr), &HdrLen) != 0 || HdrLen < (long)sizeof(Hdr))
     {
         PError("MOD: Failed to read ELF header\n");
         return -1;
     }
 
-    if (Hdr.e_ident[0] != 0x7F || Hdr.e_ident[1] != 'E' ||
-        Hdr.e_ident[2] != 'L'  || Hdr.e_ident[3] != 'F')
+    if (Hdr.e_ident[0] != 0x7F || Hdr.e_ident[1] != 'E' || Hdr.e_ident[2] != 'L' ||
+        Hdr.e_ident[3] != 'F')
     {
         PError("MOD: Bad ELF magic\n");
         return -1;
@@ -73,8 +72,8 @@ InstallModule(const char *__Path__)
         return -1;
     }
 
-    long ShtBytes = ShNum * (long)sizeof(Elf64_Shdr);
-    Elf64_Shdr *ShTbl = (Elf64_Shdr*)KMalloc((size_t)ShtBytes);
+    long        ShtBytes = ShNum * (long)sizeof(Elf64_Shdr);
+    Elf64_Shdr* ShTbl    = (Elf64_Shdr*)KMalloc((size_t)ShtBytes);
     if (!ShTbl)
     {
         PError("MOD: KMalloc ShTbl failed\n");
@@ -82,7 +81,7 @@ InstallModule(const char *__Path__)
     }
 
     {
-        File *F = VfsOpen(__Path__, VFlgRDONLY);
+        File* F = VfsOpen(__Path__, VFlgRDONLY);
         if (!F)
         {
             KFree(ShTbl);
@@ -110,8 +109,14 @@ InstallModule(const char *__Path__)
     for (long I = 0; I < ShNum; I++)
     {
         uint32_t T = ShTbl[I].sh_type;
-        if (T == (uint32_t)2U && SymtabIdx < 0) SymtabIdx = I;
-        else if (T == (uint32_t)3U && StrtabIdx < 0) StrtabIdx = I;
+        if (T == (uint32_t)2U && SymtabIdx < 0)
+        {
+            SymtabIdx = I;
+        }
+        else if (T == (uint32_t)3U && StrtabIdx < 0)
+        {
+            StrtabIdx = I;
+        }
     }
     if (SymtabIdx < 0 || StrtabIdx < 0)
     {
@@ -120,22 +125,28 @@ InstallModule(const char *__Path__)
         return -1;
     }
 
-    const Elf64_Shdr *SymSh = &ShTbl[SymtabIdx];
-    const Elf64_Shdr *StrSh = &ShTbl[StrtabIdx];
+    const Elf64_Shdr* SymSh = &ShTbl[SymtabIdx];
+    const Elf64_Shdr* StrSh = &ShTbl[StrtabIdx];
 
-    Elf64_Sym *SymBuf = (Elf64_Sym*)KMalloc((size_t)SymSh->sh_size);
-    char *StrBuf      = (char*)KMalloc((size_t)StrSh->sh_size);
+    Elf64_Sym* SymBuf = (Elf64_Sym*)KMalloc((size_t)SymSh->sh_size);
+    char*      StrBuf = (char*)KMalloc((size_t)StrSh->sh_size);
     if (!SymBuf || !StrBuf)
     {
-        if (SymBuf) KFree(SymBuf);
-        if (StrBuf) KFree(StrBuf);
+        if (SymBuf)
+        {
+            KFree(SymBuf);
+        }
+        if (StrBuf)
+        {
+            KFree(StrBuf);
+        }
         KFree(ShTbl);
         PError("MOD: KMalloc sym/str failed\n");
         return -1;
     }
 
     {
-        File *F = VfsOpen(__Path__, VFlgRDONLY);
+        File* F = VfsOpen(__Path__, VFlgRDONLY);
         if (!F)
         {
             KFree(SymBuf);
@@ -175,8 +186,8 @@ InstallModule(const char *__Path__)
         }
     }
 
-    long SymCount = (long)((long)SymSh->sh_size / (long)sizeof(Elf64_Sym));
-    __ElfSymbol__ *Syms = (__ElfSymbol__*)KMalloc((size_t)(SymCount * (long)sizeof(__ElfSymbol__)));
+    long           SymCount = (long)((long)SymSh->sh_size / (long)sizeof(Elf64_Sym));
+    __ElfSymbol__* Syms = (__ElfSymbol__*)KMalloc((size_t)(SymCount * (long)sizeof(__ElfSymbol__)));
     if (!Syms)
     {
         KFree(SymBuf);
@@ -188,18 +199,18 @@ InstallModule(const char *__Path__)
 
     for (long I = 0; I < SymCount; I++)
     {
-        uint32_t NameOff = SymBuf[I].st_name;
-        const char *Nm = (NameOff < (uint32_t)StrSh->sh_size) ? (StrBuf + NameOff) : 0;
+        uint32_t    NameOff = SymBuf[I].st_name;
+        const char* Nm      = (NameOff < (uint32_t)StrSh->sh_size) ? (StrBuf + NameOff) : 0;
 
-        Syms[I].Name  = Nm;
-        Syms[I].Value = SymBuf[I].st_value;
-        Syms[I].Shndx = SymBuf[I].st_shndx;
-        Syms[I].Info  = SymBuf[I].st_info;
+        Syms[I].Name         = Nm;
+        Syms[I].Value        = SymBuf[I].st_value;
+        Syms[I].Shndx        = SymBuf[I].st_shndx;
+        Syms[I].Info         = SymBuf[I].st_info;
         Syms[I].ResolvedAddr = 0ULL;
     }
     PInfo("ELF: Loaded symbols\n");
 
-    void **SectionBases = (void**)KMalloc((size_t)(ShNum * (long)sizeof(void*)));
+    void** SectionBases = (void**)KMalloc((size_t)(ShNum * (long)sizeof(void*)));
     if (!SectionBases)
     {
         KFree(Syms);
@@ -213,10 +224,10 @@ InstallModule(const char *__Path__)
 
     for (long I = 0; I < ShNum; I++)
     {
-        const Elf64_Shdr *S = &ShTbl[I];
-        long Size = (long)S->sh_size;
-        uint32_t Type = S->sh_type;
-        uint64_t Flags = S->sh_flags;
+        const Elf64_Shdr* S     = &ShTbl[I];
+        long              Size  = (long)S->sh_size;
+        uint32_t          Type  = S->sh_type;
+        uint64_t          Flags = S->sh_flags;
 
         if (Size <= 0)
         {
@@ -224,8 +235,8 @@ InstallModule(const char *__Path__)
             continue;
         }
 
-        int IsText = (Flags & (uint64_t)0x4ULL) ? 1 : 0;
-        void *Base = ModMalloc((size_t)Size, IsText ? 1 : 0);
+        int   IsText = (Flags & (uint64_t)0x4ULL) ? 1 : 0;
+        void* Base   = ModMalloc((size_t)Size, IsText ? 1 : 0);
         if (!Base)
         {
             PError("MOD: ModMalloc failed\n");
@@ -234,7 +245,10 @@ InstallModule(const char *__Path__)
                 if (SectionBases[J] && SectionBases[J] != (void*)ZeroStub)
                 {
                     long SzJ = (long)ShTbl[J].sh_size;
-                    if (SzJ > 0) ModFree(SectionBases[J], (size_t)SzJ);
+                    if (SzJ > 0)
+                    {
+                        ModFree(SectionBases[J], (size_t)SzJ);
+                    }
                 }
             }
             KFree(SectionBases);
@@ -253,7 +267,7 @@ InstallModule(const char *__Path__)
         }
         else
         {
-            File *F = VfsOpen(__Path__, VFlgRDONLY);
+            File* F = VfsOpen(__Path__, VFlgRDONLY);
             if (!F)
             {
                 PError("MOD: VfsOpen payload failed\n");
@@ -277,7 +291,7 @@ InstallModule(const char *__Path__)
 
     for (long I = 0; I < SymCount; I++)
     {
-        uint16_t Sh = Syms[I].Shndx;
+        uint16_t Sh   = Syms[I].Shndx;
         uint64_t Base = 0;
 
         if (Sh == 0)
@@ -292,15 +306,21 @@ InstallModule(const char *__Path__)
         Syms[I].ResolvedAddr = Base ? (Base + Syms[I].Value) : 0ULL;
     }
 
-    typedef struct { uint64_t r_offset; uint64_t r_info; } Elf64_Rel;
+    typedef struct
+    {
+        uint64_t r_offset;
+        uint64_t r_info;
+    } Elf64_Rel;
 
     for (long RIdx = 0; RIdx < ShNum; RIdx++)
     {
-        const Elf64_Shdr *RelSh = &ShTbl[RIdx];
-        uint64_t RelSecType = RelSh->sh_type;
+        const Elf64_Shdr* RelSh      = &ShTbl[RIdx];
+        uint64_t          RelSecType = RelSh->sh_type;
 
         if (RelSecType != (uint64_t)4ULL && RelSecType != (uint64_t)9ULL)
+        {
             continue;
+        }
 
         uint32_t TgtIdx = RelSh->sh_info;
         if (TgtIdx >= (uint32_t)ShNum)
@@ -314,18 +334,22 @@ InstallModule(const char *__Path__)
             SectionBases[TgtIdx] = (void*)ZeroStub;
         }
 
-        long EntSz = (RelSecType == (uint64_t)4ULL) ? (long)sizeof(Elf64_Rela) : (long)sizeof(Elf64_Rel);
+        long EntSz =
+            (RelSecType == (uint64_t)4ULL) ? (long)sizeof(Elf64_Rela) : (long)sizeof(Elf64_Rel);
         long RelCnt = (long)((long)RelSh->sh_size / EntSz);
-        if (RelCnt <= 0) continue;
+        if (RelCnt <= 0)
+        {
+            continue;
+        }
 
-        void *RelBuf = KMalloc((size_t)RelSh->sh_size);
+        void* RelBuf = KMalloc((size_t)RelSh->sh_size);
         if (!RelBuf)
         {
             PError("ELF: KMalloc RELOC buf failed\n");
             continue;
         }
 
-        File *RF = VfsOpen(__Path__, VFlgRDONLY);
+        File* RF = VfsOpen(__Path__, VFlgRDONLY);
         if (!RF)
         {
             KFree(RelBuf);
@@ -350,25 +374,35 @@ InstallModule(const char *__Path__)
 
         for (long I = 0; I < RelCnt; I++)
         {
-            uint32_t Type, SymIndex; uint64_t A; uint8_t *Loc;
+            uint32_t Type, SymIndex;
+            uint64_t A;
+            uint8_t* Loc;
             if (RelSecType == (uint64_t)4ULL)
             {
-                const Elf64_Rela *R = &((Elf64_Rela*)RelBuf)[I];
-                Type     = (uint32_t)(R->r_info & 0xffffffffU);
-                SymIndex = (uint32_t)(R->r_info >> 32);
-                A        = R->r_addend;
-                Loc      = ((uint8_t*)SectionBases[TgtIdx]) + R->r_offset;
+                const Elf64_Rela* R = &((Elf64_Rela*)RelBuf)[I];
+                Type                = (uint32_t)(R->r_info & 0xffffffffU);
+                SymIndex            = (uint32_t)(R->r_info >> 32);
+                A                   = R->r_addend;
+                Loc                 = ((uint8_t*)SectionBases[TgtIdx]) + R->r_offset;
             }
             else
             {
-                const Elf64_Rel *R = &((Elf64_Rel*)RelBuf)[I];
-                Type     = (uint32_t)(R->r_info & 0xffffffffU);
-                SymIndex = (uint32_t)(R->r_info >> 32);
-                Loc      = ((uint8_t*)SectionBases[TgtIdx]) + R->r_offset;
-                if (Type == 1U || Type == 8U)       A = *(uint64_t*)Loc;
-                else if (Type == 2U || Type == 4U ||
-                         Type == 10U || Type == 11U) A = (uint64_t)*(int32_t*)Loc;
-                else A = 0;
+                const Elf64_Rel* R = &((Elf64_Rel*)RelBuf)[I];
+                Type               = (uint32_t)(R->r_info & 0xffffffffU);
+                SymIndex           = (uint32_t)(R->r_info >> 32);
+                Loc                = ((uint8_t*)SectionBases[TgtIdx]) + R->r_offset;
+                if (Type == 1U || Type == 8U)
+                {
+                    A = *(uint64_t*)Loc;
+                }
+                else if (Type == 2U || Type == 4U || Type == 10U || Type == 11U)
+                {
+                    A = (uint64_t)*(int32_t*)Loc;
+                }
+                else
+                {
+                    A = 0;
+                }
             }
 
             if (SymIndex >= (uint32_t)SymCount)
@@ -377,13 +411,13 @@ InstallModule(const char *__Path__)
                 continue;
             }
 
-            const __ElfSymbol__ *Sym = &Syms[SymIndex];
-            uint64_t S = Sym->ResolvedAddr;
+            const __ElfSymbol__* Sym = &Syms[SymIndex];
+            uint64_t             S   = Sym->ResolvedAddr;
 
             if (!S && Sym->Shndx == 0)
             {
-                void *Ext = KexpLookup(Sym->Name);
-                S = (uint64_t)Ext;
+                void* Ext = KexpLookup(Sym->Name);
+                S         = (uint64_t)Ext;
                 if (!Ext)
                 {
                     PError("ELF: Undefined external symbol\n");
@@ -393,67 +427,71 @@ InstallModule(const char *__Path__)
 
             switch (Type)
             {
-            case 1U:
-                *(uint64_t*)Loc = S + A;
-                break;
+                case 1U:
+                    *(uint64_t*)Loc = S + A;
+                    break;
 
-            case 2U:
-            case 4U:
-            {
-                int64_t P = (int64_t)((uint64_t)Loc + 4);
-                int64_t Disp64 = (int64_t)S - P;
-                *(int32_t*)Loc = (int32_t)Disp64;
-                break;
-            }
+                case 2U:
+                case 4U:
+                {
+                    int64_t P      = (int64_t)((uint64_t)Loc + 4);
+                    int64_t Disp64 = (int64_t)S - P;
+                    *(int32_t*)Loc = (int32_t)Disp64;
+                    break;
+                }
 
-            case 8U:
-                *(uint64_t*)Loc = (uint64_t)SectionBases[TgtIdx] + A;
-                break;
+                case 8U:
+                    *(uint64_t*)Loc = (uint64_t)SectionBases[TgtIdx] + A;
+                    break;
 
-            case 9U:
-            {
-                int64_t P = (int64_t)((uint64_t)Loc + 4);
-                __int128 S128 = (__int128)((int64_t)S);
-                __int128 A128 = (__int128)((int64_t)A);
-                __int128 P128 = (__int128)P;
-                __int128 Disp128 = S128 + A128 - P128;
-                int32_t Disp32 = (int32_t)Disp128;
-                *(int32_t*)Loc = Disp32;
-                break;
-            }
+                case 9U:
+                {
+                    int64_t  P       = (int64_t)((uint64_t)Loc + 4);
+                    __int128 S128    = (__int128)((int64_t)S);
+                    __int128 A128    = (__int128)((int64_t)A);
+                    __int128 P128    = (__int128)P;
+                    __int128 Disp128 = S128 + A128 - P128;
+                    int32_t  Disp32  = (int32_t)Disp128;
+                    *(int32_t*)Loc   = Disp32;
+                    break;
+                }
 
-            case 10U:
-            {
-                uint64_t Val = S + A;
-                *(uint32_t*)Loc = (uint32_t)Val;
-                break;
-            }
+                case 10U:
+                {
+                    uint64_t Val    = S + A;
+                    *(uint32_t*)Loc = (uint32_t)Val;
+                    break;
+                }
 
-            case 11U:
-            {
-                int64_t Val = (int64_t)(S + A);
-                *(int32_t*)Loc = (int32_t)Val;
-                break;
-            }
+                case 11U:
+                {
+                    int64_t Val    = (int64_t)(S + A);
+                    *(int32_t*)Loc = (int32_t)Val;
+                    break;
+                }
 
-            default:
-                PWarn("ELF: RELOC unsupported type\n");
-                break;
+                default:
+                    PWarn("ELF: RELOC unsupported type\n");
+                    break;
             }
         }
 
         KFree(RelBuf);
     }
-	const __ElfSymbol__ *InitSym = 0;
-    const __ElfSymbol__ *ExitSym = 0;
+    const __ElfSymbol__* InitSym = 0;
+    const __ElfSymbol__* ExitSym = 0;
 
     for (long I = 0; I < SymCount; I++)
     {
         if (Syms[I].Name && strcmp(Syms[I].Name, "module_init") == 0)
+        {
             InitSym = &Syms[I];
+        }
 
         else if (Syms[I].Name && strcmp(Syms[I].Name, "module_exit") == 0)
+        {
             ExitSym = &Syms[I];
+        }
     }
     if (!InitSym)
     {
@@ -463,7 +501,10 @@ InstallModule(const char *__Path__)
             if (SectionBases[J] && SectionBases[J] != (void*)ZeroStub)
             {
                 long SzJ = (long)ShTbl[J].sh_size;
-                if (SzJ > 0) ModFree(SectionBases[J], (size_t)SzJ);
+                if (SzJ > 0)
+                {
+                    ModFree(SectionBases[J], (size_t)SzJ);
+                }
             }
         }
         KFree(SectionBases);
@@ -479,37 +520,35 @@ InstallModule(const char *__Path__)
 
     if (InitSym->ResolvedAddr)
     {
-        InitFn = (void(*)(void))(uintptr_t)InitSym->ResolvedAddr;
+        InitFn = (void (*)(void))(uintptr_t)InitSym->ResolvedAddr;
     }
     else
     {
-        uint8_t *Base = (uint8_t*)((InitSym->Shndx < (uint16_t)ShNum)
-        ? SectionBases[InitSym->Shndx] : 0);
+        uint8_t* Base =
+            (uint8_t*)((InitSym->Shndx < (uint16_t)ShNum) ? SectionBases[InitSym->Shndx] : 0);
 
-        InitFn = (void(*)(void))(Base ? (Base + InitSym->Value)
-        : (uint8_t*)InitSym->Value);
+        InitFn = (void (*)(void))(Base ? (Base + InitSym->Value) : (uint8_t*)InitSym->Value);
     }
 
     if (ExitSym)
     {
         if (ExitSym->ResolvedAddr)
         {
-            ExitFn = (void(*)(void))(uintptr_t)ExitSym->ResolvedAddr;
+            ExitFn = (void (*)(void))(uintptr_t)ExitSym->ResolvedAddr;
         }
         else
         {
-            uint8_t *BaseE = (uint8_t*)((ExitSym->Shndx < (uint16_t)ShNum)
-            ? SectionBases[ExitSym->Shndx] : 0);
+            uint8_t* BaseE =
+                (uint8_t*)((ExitSym->Shndx < (uint16_t)ShNum) ? SectionBases[ExitSym->Shndx] : 0);
 
-            ExitFn = (void(*)(void))(BaseE ? (BaseE + ExitSym->Value)
-            : (uint8_t*)ExitSym->Value);
+            ExitFn = (void (*)(void))(BaseE ? (BaseE + ExitSym->Value) : (uint8_t*)ExitSym->Value);
         }
     }
 
     PInfo("MOD: Calling module_init at %p\n", InitFn);
     InitFn();
 
-	ModuleRecord *Rec = (ModuleRecord*)KMalloc(sizeof(ModuleRecord));
+    ModuleRecord* Rec = (ModuleRecord*)KMalloc(sizeof(ModuleRecord));
     if (!Rec)
     {
         PError("MOD: Registry alloc failed\n");
@@ -526,7 +565,7 @@ InstallModule(const char *__Path__)
     Rec->SectionCount = ShNum;
     Rec->ZeroStub     = ZeroStub;
     Rec->InitFn       = InitFn;
-    Rec->ExitFn       = ExitFn;   /* now resolved if present */
+    Rec->ExitFn       = ExitFn; /* now resolved if present */
     Rec->RefCount     = 1;
     Rec->Next         = 0;
 
@@ -552,7 +591,7 @@ InstallModule(const char *__Path__)
  * @return 0 on success, -1 on failure
  */
 int
-UnInstallModule(const char *__Path__)
+UnInstallModule(const char* __Path__)
 {
     if (!__Path__)
     {
@@ -560,7 +599,7 @@ UnInstallModule(const char *__Path__)
         return -1;
     }
 
-    ModuleRecord *Rec = ModuleRegistryFind(__Path__);
+    ModuleRecord* Rec = ModuleRegistryFind(__Path__);
     if (!Rec)
     {
         PError("MOD: Module not found for uninstall: %s\n", __Path__);
@@ -584,7 +623,10 @@ UnInstallModule(const char *__Path__)
         if (Rec->SectionBases[I] && Rec->SectionBases[I] != (void*)Rec->ZeroStub)
         {
             long Sz = (long)Rec->ShTbl[I].sh_size;
-            if (Sz > 0) ModFree(Rec->SectionBases[I], (size_t)Sz);
+            if (Sz > 0)
+            {
+                ModFree(Rec->SectionBases[I], (size_t)Sz);
+            }
         }
     }
 

@@ -6,32 +6,34 @@
 /**
  * Structs
  */
-typedef struct ModuleRecord {
-    const char    *Name;
-    void         **SectionBases;
-    Elf64_Shdr    *ShTbl;
-    __ElfSymbol__ *Syms;
-    Elf64_Sym     *SymBuf;
-    char          *StrBuf;
+typedef struct ModuleRecord
+{
+    const char*    Name;
+    void**         SectionBases;
+    Elf64_Shdr*    ShTbl;
+    __ElfSymbol__* Syms;
+    Elf64_Sym*     SymBuf;
+    char*          StrBuf;
     long           SectionCount;
-    uint8_t       *ZeroStub;
+    uint8_t*       ZeroStub;
 
     void (*InitFn)(void);
     void (*ExitFn)(void);
 
-    int            RefCount;
-    struct ModuleRecord *Next;
+    int                  RefCount;
+    struct ModuleRecord* Next;
+
 } ModuleRecord;
 
 /**
  * Globals
  */
-extern ModuleRecord *ModuleListHead;
+extern ModuleRecord* ModuleListHead;
 
 /**
  * Functions
  */
-int ModuleRegistryInit(void);
-int ModuleRegistryAdd(ModuleRecord *__Rec__);
-ModuleRecord *ModuleRegistryFind(const char *__Name__);
-int ModuleRegistryRemove(ModuleRecord *__Rec__);
+int           ModuleRegistryInit(void);
+int           ModuleRegistryAdd(ModuleRecord* __Rec__);
+ModuleRecord* ModuleRegistryFind(const char* __Name__);
+int           ModuleRegistryRemove(ModuleRecord* __Rec__);

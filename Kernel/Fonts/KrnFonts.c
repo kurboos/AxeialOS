@@ -20,16 +20,15 @@
  * @note Assumes an 8x16 fixed-width font defined in KrnlFontMap.
  */
 void
-DisplayChar(
-uint32_t *__FrameBuffer__,
-uint32_t __FrameBufferW__,
-uint32_t __PosX__,
-uint32_t __PosY__,
-char __Char__,
-uint32_t __32bitColor__)
+DisplayChar(uint32_t* __FrameBuffer__,
+            uint32_t  __FrameBufferW__,
+            uint32_t  __PosX__,
+            uint32_t  __PosY__,
+            char      __Char__,
+            uint32_t  __32bitColor__)
 {
     /* Retrieve the 16-byte bitmap for this character */
-    const uint8_t *Character = KrnlFontMap[(uint8_t)__Char__];
+    const uint8_t* Character = KrnlFontMap[(uint8_t)__Char__];
 
     /* Render each row of the 8x16 character */
     for (int MapRow = 0; MapRow < FontH; MapRow++)
@@ -43,7 +42,8 @@ uint32_t __32bitColor__)
             if (Line & (0x80 >> Column))
             {
                 /* Calculate framebuffer offset and set pixel */
-                __FrameBuffer__[(__PosY__ + MapRow) * __FrameBufferW__ + (__PosX__ + Column)] = __32bitColor__;
+                __FrameBuffer__[(__PosY__ + MapRow) * __FrameBufferW__ + (__PosX__ + Column)] =
+                    __32bitColor__;
             }
         }
     }
@@ -69,13 +69,12 @@ uint32_t __32bitColor__)
  *       or simple text overlays directly to the framebuffer.
  */
 void
-DisplayString(
-uint32_t *__FrameBuffer__,
-uint32_t __FrameBufferW__,
-uint32_t __PosX__,
-uint32_t __PosY__,
-const char *__String__,
-uint32_t __32bitColor__)
+DisplayString(uint32_t*   __FrameBuffer__,
+              uint32_t    __FrameBufferW__,
+              uint32_t    __PosX__,
+              uint32_t    __PosY__,
+              const char* __String__,
+              uint32_t    __32bitColor__)
 {
     uint32_t PosX = __PosX__;
 
@@ -83,7 +82,7 @@ uint32_t __32bitColor__)
     while (*__String__)
     {
         DisplayChar(__FrameBuffer__, __FrameBufferW__, PosX, __PosY__, *__String__, __32bitColor__);
-        PosX += FontW;  /* Advance to next character position */
-        __String__++;   /* Move to next character in string */
+        PosX += FontW; /* Advance to next character position */
+        __String__++;  /* Move to next character in string */
     }
 }

@@ -2,6 +2,4 @@
 
 #include <LimineServices.h>
 
-extern volatile struct
-limine_rsdp_request
-EarlyLimineRsdp;
+extern volatile struct limine_rsdp_request EarlyLimineRsdp;

@@ -5,6 +5,4 @@
 /**
  * Limine HHDM request
  */
-extern volatile struct 
-limine_hhdm_request
-HhdmRequest;
+extern volatile struct limine_hhdm_request HhdmRequest;

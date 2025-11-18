@@ -1,5 +1,5 @@
-#include <Timer.h>      /* Timer management structures */
-#include <HPETTimer.h>  /* HPET-specific constants and definitions */
+#include <HPETTimer.h> /* HPET-specific constants and definitions */
+#include <Timer.h>     /* Timer management structures */
 
 /** @todo Add HPET Support. */
 

@@ -6,14 +6,13 @@
 /**
  * Spinlock
  */
-typedef
-struct
+typedef struct
 {
-	
+
     volatile uint32_t Lock;
-    uint32_t CpuId;
-    const char* Name;
-	uint64_t Flags;
+    uint32_t          CpuId;
+    const char*       Name;
+    uint64_t          Flags;
 
 } SpinLock;
 
@@ -25,13 +24,12 @@ bool TryAcquireSpinLock(SpinLock* __Lock__);
 /**
  * Mutex
  */
-typedef
-struct
+typedef struct
 {
     volatile uint32_t Lock;
-    uint32_t Owner;
-    uint32_t RecursionCount;
-    const char* Name;
+    uint32_t          Owner;
+    uint32_t          RecursionCount;
+    const char*       Name;
 } Mutex;
 
 void InitializeMutex(Mutex* __Mutex__, const char* __Name__);
@@ -42,13 +40,12 @@ bool TryAcquireMutex(Mutex* __Mutex__);
 /**
  * Semaphore
  */
-typedef
-struct
+typedef struct
 {
-    volatile int32_t Count;
+    volatile int32_t  Count;
     volatile uint32_t WaitQueue;
-    SpinLock QueueLock;
-    const char* Name;
+    SpinLock          QueueLock;
+    const char*       Name;
 } Semaphore;
 
 void InitializeSemaphore(Semaphore* __Semaphore__, int32_t __InitialCount__, const char* __Name__);

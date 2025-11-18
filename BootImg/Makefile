@@ -1,61 +1,26 @@
-BuildDirectory      := ../.Build
-EFIRoot             := $(BuildDirectory)/EFI
-ImgSysMirror        := .Build
+BuildDirectory := ../.Build
+EFIRoot        := $(BuildDirectory)/EFI
+ImgSysMirror   := .Build
+BootImg        := $(BuildDirectory)/BootImg.img
 
-BootImg             := $(BuildDirectory)/BootImg.img
+SubMake := $(shell find . -name Makefile -not -path './Makefile')
 
-CC                  := gcc
-CFLAGS := \
--std=c11 \
--ffreestanding \
--fno-stack-protector \
--fno-stack-check \
--fno-lto \
--fno-pie \
--fno-builtin \
--fno-omit-frame-pointer \
--mno-red-zone \
--mno-mmx \
--mno-sse \
--mno-sse2 \
--mno-sse3 \
--mno-ssse3 \
--mno-sse4.1 \
--mno-sse4.2 \
--mno-sse4 \
--mno-avx \
--mno-avx2 \
--mno-80387 \
--m64 \
--march=x86-64 \
--mcmodel=kernel \
--Wall \
--Wextra \
--Werror \
--Wno-unused-parameter \
--Wno-unused-variable \
--O2 \
--g \
--I../KModLibs/Includes
+.PHONY: all clean BootImg BuildModules
 
-KOFILES             := $(patsubst %.c,$(ImgSysMirror)/%.ko,$(shell find . -name '*.c'))
+all: BuildModules BootImg
 
-.PHONY: \
-BuildModules \
-clean \
-BootImg
-
-BuildModules: \
-$(KOFILES)\
-BootImg
-
-# C
-$(ImgSysMirror)/%.ko: %.c
-	@mkdir -p $(dir $@)
-	@$(CC) $(CFLAGS) -c $< -o $@
-BootImg: $(KOFILES)
+BuildModules:
+	@for mk in $(SubMake); do \
+		echo ">>> Building in $$(dirname $$mk)"; \
+		$(MAKE) -C $$(dirname $$mk); \
+	done
+BootImg:
 	@mkdir -p $(BuildDirectory)
 	@(cd $(ImgSysMirror) && find . | cpio -o -H newc) > $(BootImg)
 	@cp $(BootImg) $(EFIRoot)/
+	
 clean:
 	@rm -rf $(BuildDirectory)/BootImg.img
+	@for mk in $(SubMake); do \
+		$(MAKE) -C $$(dirname $$mk) clean; \
+	done

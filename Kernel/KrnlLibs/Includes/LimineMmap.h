@@ -5,6 +5,4 @@
 /**
  * Limine MemMap Request
  */
-extern volatile struct 
-limine_memmap_request 
-MemmapRequest;
+extern volatile struct limine_memmap_request MemmapRequest;

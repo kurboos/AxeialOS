@@ -1,31 +1,31 @@
 #pragma once
 
 #include <AllTypes.h>
-#include <KrnPrintf.h>
-#include <SMP.h>
 #include <GDT.h>
 #include <IDT.h>
+#include <KrnPrintf.h>
 #include <PerCPUData.h>
+#include <SMP.h>
 
 /**
  * AP Startup Constants
  */
-#define ApTrampolineBase        0x7000
-#define ApStackSize             0x4000
-#define ApStartupTimeout        10000
-#define ApicDeliveryTimeout     10000
+#define ApTrampolineBase    0x7000
+#define ApStackSize         0x4000
+#define ApStartupTimeout    10000
+#define ApicDeliveryTimeout 10000
 
 /**
- * Intel MP Specification IPI Values
+ * IPI Values
  */
-#define IpiInit                 0x00C500
-#define IpiInitDeassert         0x008500
-#define IpiStartup              0x000600
+#define IpiInit         0x00C500
+#define IpiInitDeassert 0x008500
+#define IpiStartup      0x000600
 
 /**
  * @deprecated Trampoline Signature
  */
-#define ApTrampolineSignature   0xDEADBEEF
+#define ApTrampolineSignature 0xDEADBEEF
 
 /**
  * Stack Size
@@ -35,8 +35,7 @@
 /**
  * AP Status
  */
-typedef
-enum
+typedef enum
 {
     AP_STATUS_OFFLINE,
     AP_STATUS_STARTING,
@@ -47,14 +46,13 @@ enum
 /**
  * AP Information
  */
-typedef
-struct
+typedef struct
 {
 
-    uint32_t ApicId;
-    uint32_t CpuNumber;
-    ApStatus Status;
-    uint64_t StackTop;
+    uint32_t          ApicId;
+    uint32_t          CpuNumber;
+    ApStatus          Status;
+    uint64_t          StackTop;
     volatile uint32_t Started;
 
 } ApInfo;
@@ -62,28 +60,33 @@ struct
 /**
  * @deprecated Tramp Layout
  */
-#define TrampolineSignatureOffset  0x200
-#define TrampolinePageDirOffset    0x208
-#define TrampolineStackOffset      0x210
-#define TrampolineEntryOffset      0x218
-#define TrampolineGdtOffset        0x220
-#define TrampolineGdtDescOffset    0x228
+#define TrampolineSignatureOffset 0x200
+#define TrampolinePageDirOffset   0x208
+#define TrampolineStackOffset     0x210
+#define TrampolineEntryOffset     0x218
+#define TrampolineGdtOffset       0x220
+#define TrampolineGdtDescOffset   0x228
 
 /**
  * Globals
  */
-extern ApInfo ApProcessors[MaxCPUs];
+extern ApInfo            ApProcessors[MaxCPUs];
 extern volatile uint32_t ApStartupCount;
-extern SpinLock SMPLock;
+extern SpinLock          SMPLock;
 
 /**
  * Per-CPU TSS Selectors
  */
-extern uint16_t CpuTssSelectors[MaxCPUs];
+extern uint16_t         CpuTssSelectors[MaxCPUs];
 extern TaskStateSegment CpuTssStructures[MaxCPUs];
 
 /**
  * Functions
  */
-uint32_t GetCurrentCpuId(void);
+uint32_t    GetCurrentCpuId(void);
 PerCpuData* GetPerCpuData(uint32_t __CpuNumber__);
+
+/**
+ * Public
+ */
+KEXPORT(GetCurrentCpuId);

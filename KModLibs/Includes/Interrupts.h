@@ -5,8 +5,8 @@
 /**
  * Constants
  */
-#define IdtTypeInterruptGate  0x8E
-#define IdtTypeTrapGate       0x8F
+#define IdtTypeInterruptGate 0x8E
+#define IdtTypeTrapGate      0x8F
 
 /**
  * Functions

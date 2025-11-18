@@ -2,12 +2,24 @@
 #include <IDT.h>
 #include <Timer.h>
 
-
 CpuScheduler CpuSchedulers[MaxCPUs];
+
+/** @brief FX/FPU Helpers */
+static inline void
+ThreadFxSave(void* __State__)
+{
+    __asm__ volatile("fxsave %0" : "=m"(*(char (*)[512])__State__));
+}
+
+static inline void
+ThreadFxRestore(const void* __State__)
+{
+    __asm__ volatile("fxrstor %0" ::"m"(*(const char (*)[512])__State__));
+}
 
 /**
  * @brief Add Thread to Ready Queue
- * 
+ *
  * @param __CpuId__ CPU identifier where the thread will be added
  * @param __ThreadPtr__ Pointer to the thread to add
  *
@@ -20,19 +32,21 @@ void
 AddThreadToReadyQueue(uint32_t __CpuId__, Thread* __ThreadPtr__)
 {
     if (__CpuId__ >= MaxCPUs || !__ThreadPtr__)
+    {
         return;
-        
+    }
+
     CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    
+
     /* Set thread state and last CPU in an atomic operation */
     __atomic_store_n(&__ThreadPtr__->State, ThreadStateReady, __ATOMIC_SEQ_CST);
     __atomic_store_n(&__ThreadPtr__->LastCpu, __CpuId__, __ATOMIC_SEQ_CST);
     __ThreadPtr__->Next = NULL;
     __ThreadPtr__->Prev = NULL;
-    
+
     /* Acquire scheduler spinlock before altering the ready queue */
     AcquireSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* If the ready queue is empty, add thread as the first element */
     if (!Scheduler->ReadyQueue)
     {
@@ -43,21 +57,23 @@ AddThreadToReadyQueue(uint32_t __CpuId__, Thread* __ThreadPtr__)
         /* Otherwise, walk the list to the tail and append the thread */
         Thread* Tail = Scheduler->ReadyQueue;
         while (Tail->Next)
+        {
             Tail = Tail->Next;
-        Tail->Next = __ThreadPtr__;
+        }
+        Tail->Next          = __ThreadPtr__;
         __ThreadPtr__->Prev = Tail;
     }
-    
+
     /* Release the spinlock after modification */
     ReleaseSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* Atomically increment the count of ready threads */
     __atomic_fetch_add(&Scheduler->ReadyCount, 1, __ATOMIC_SEQ_CST);
 }
 
 /**
  * @brief Remove Thread from Ready Queue
- * 
+ *
  * @param __CpuId__ CPU identifier from which to remove the thread
  * @return Pointer to the removed thread, or NULL if no thread was ready
  *
@@ -70,35 +86,39 @@ Thread*
 RemoveThreadFromReadyQueue(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return NULL;
-        
+    }
+
     CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    Thread* ThreadPtr = NULL;
-    
+    Thread*       ThreadPtr = NULL;
+
     /* Acquire spinlock to modify ready queue safely */
     AcquireSpinLock(&Scheduler->SchedulerLock);
-    
+
     ThreadPtr = Scheduler->ReadyQueue;
-    
+
     /* If queue is empty, release lock and return NULL */
     if (!ThreadPtr)
     {
         ReleaseSpinLock(&Scheduler->SchedulerLock);
         return NULL;
     }
-    
+
     /* Remove from the head of the queue */
     Scheduler->ReadyQueue = ThreadPtr->Next;
     if (ThreadPtr->Next)
+    {
         ThreadPtr->Next->Prev = NULL;
-    
+    }
+
     /* Clear thread linkage pointers */
     ThreadPtr->Next = NULL;
     ThreadPtr->Prev = NULL;
-    
+
     /* Release the spinlock after modification */
     ReleaseSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* Atomically decrement the ready count */
     __atomic_fetch_sub(&Scheduler->ReadyCount, 1, __ATOMIC_SEQ_CST);
     return ThreadPtr;
@@ -106,7 +126,7 @@ RemoveThreadFromReadyQueue(uint32_t __CpuId__)
 
 /**
  * @brief Add Thread to Waiting Queue
- * 
+ *
  * @param __CpuId__ CPU identifier where the thread will be added
  * @param __ThreadPtr__ Pointer to the thread to add
  *
@@ -119,27 +139,29 @@ void
 AddThreadToWaitingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__)
 {
     if (__CpuId__ >= MaxCPUs || !__ThreadPtr__)
+    {
         return;
-        
+    }
+
     CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    
+
     /* Set thread state to blocked atomically */
     __atomic_store_n(&__ThreadPtr__->State, ThreadStateBlocked, __ATOMIC_SEQ_CST);
-    
+
     /* Acquire spinlock before modifying the waiting queue */
     AcquireSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* Add thread at head of waiting queue */
-    __ThreadPtr__->Next = Scheduler->WaitingQueue;
+    __ThreadPtr__->Next     = Scheduler->WaitingQueue;
     Scheduler->WaitingQueue = __ThreadPtr__;
-    
+
     /* Release spinlock after modification */
     ReleaseSpinLock(&Scheduler->SchedulerLock);
 }
 
 /**
  * @brief Add Thread to Zombie Queue
- * 
+ *
  * @param __CpuId__ CPU identifier where the thread will be added
  * @param __ThreadPtr__ Pointer to the thread to add
  *
@@ -151,30 +173,32 @@ void
 AddThreadToZombieQueue(uint32_t __CpuId__, Thread* __ThreadPtr__)
 {
     if (__CpuId__ >= MaxCPUs || !__ThreadPtr__)
+    {
         return;
-        
+    }
+
     CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    
+
     /* Set thread state to zombie atomically */
     __atomic_store_n(&__ThreadPtr__->State, ThreadStateZombie, __ATOMIC_SEQ_CST);
-    
+
     /* Acquire spinlock before modifying zombie queue */
     AcquireSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* Insert thread at the head of zombie queue */
-    __ThreadPtr__->Next = Scheduler->ZombieQueue;
+    __ThreadPtr__->Next    = Scheduler->ZombieQueue;
     Scheduler->ZombieQueue = __ThreadPtr__;
-    
+
     /* Release spinlock */
     ReleaseSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* Decrement overall thread count atomically */
     __atomic_fetch_sub(&Scheduler->ThreadCount, 1, __ATOMIC_SEQ_CST);
 }
 
 /**
  * @brief Add Thread to Sleeping Queue
- * 
+ *
  * @param __CpuId__ CPU identifier where the thread will be added
  * @param __ThreadPtr__ Pointer to the thread to add
  *
@@ -187,27 +211,29 @@ void
 AddThreadToSleepingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__)
 {
     if (__CpuId__ >= MaxCPUs || !__ThreadPtr__)
+    {
         return;
-        
+    }
+
     CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    
+
     /* Atomically set thread state to sleeping */
     __atomic_store_n(&__ThreadPtr__->State, ThreadStateSleeping, __ATOMIC_SEQ_CST);
-    
+
     /* Lock scheduler queue for safe insertion */
     AcquireSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* Insert at head of sleeping queue */
-    __ThreadPtr__->Next = Scheduler->SleepingQueue;
+    __ThreadPtr__->Next      = Scheduler->SleepingQueue;
     Scheduler->SleepingQueue = __ThreadPtr__;
-    
+
     /* Unlock after modification */
     ReleaseSpinLock(&Scheduler->SchedulerLock);
 }
 
 /**
  * @brief Migrate Thread to Different CPU
- * 
+ *
  * @param __ThreadPtr__ Pointer to the thread to migrate
  * @param __TargetCpuId__ Target CPU id for migration
  *
@@ -218,8 +244,10 @@ void
 MigrateThreadToCpu(Thread* __ThreadPtr__, uint32_t __TargetCpuId__)
 {
     if (!__ThreadPtr__ || __TargetCpuId__ >= MaxCPUs)
+    {
         return;
-        
+    }
+
     /* Only migrate if thread is ready to run */
     if (__ThreadPtr__->State == ThreadStateReady)
     {
@@ -230,7 +258,7 @@ MigrateThreadToCpu(Thread* __ThreadPtr__, uint32_t __TargetCpuId__)
 
 /**
  * @brief Get number of threads assigned to a CPU
- * 
+ *
  * @param __CpuId__ CPU identifier
  * @return Number of threads currently assigned
  *
@@ -240,13 +268,15 @@ uint32_t
 GetCpuThreadCount(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return 0;
+    }
     return __atomic_load_n(&CpuSchedulers[__CpuId__].ThreadCount, __ATOMIC_SEQ_CST);
 }
 
 /**
  * @brief Get number of ready threads in CPU's ready queue
- * 
+ *
  * @param __CpuId__ CPU identifier
  * @return Number of ready threads
  *
@@ -256,13 +286,15 @@ uint32_t
 GetCpuReadyCount(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return 0;
+    }
     return __atomic_load_n(&CpuSchedulers[__CpuId__].ReadyCount, __ATOMIC_SEQ_CST);
 }
 
 /**
  * @brief Get total number of context switches on CPU
- * 
+ *
  * @param __CpuId__ CPU identifier
  * @return Number of context switches
  *
@@ -272,13 +304,15 @@ uint64_t
 GetCpuContextSwitches(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return 0;
+    }
     return __atomic_load_n(&CpuSchedulers[__CpuId__].ContextSwitches, __ATOMIC_SEQ_CST);
 }
 
 /**
  * @brief Get CPU load average metric
- * 
+ *
  * @param __CpuId__ CPU identifier
  * @return Load average value
  *
@@ -288,13 +322,15 @@ uint32_t
 GetCpuLoadAverage(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return 0;
+    }
     return __atomic_load_n(&CpuSchedulers[__CpuId__].LoadAverage, __ATOMIC_SEQ_CST);
 }
 
 /**
  * @brief Wakeup Sleeping Threads whose wakeup time has elapsed
- * 
+ *
  * @param __CpuId__ CPU identifier on which to operate
  *
  * Iterates over the sleeping queue and awakens any thread whose wakeup time
@@ -306,41 +342,47 @@ void
 WakeupSleepingThreads(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return;
-        
-    CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    uint64_t CurrentTicks = GetSystemTicks();
-    
+    }
+
+    CpuScheduler* Scheduler    = &CpuSchedulers[__CpuId__];
+    uint64_t      CurrentTicks = GetSystemTicks();
+
     /* Lock sleeping queue for safe traversal and modification */
     AcquireSpinLock(&Scheduler->SchedulerLock);
-    
+
     Thread* Current = Scheduler->SleepingQueue;
-    Thread* Prev = NULL;
-    
+    Thread* Prev    = NULL;
+
     /* Traverse sleeping queue */
     while (Current)
     {
         Thread* Next = Current->Next;
-        
+
         /* Check if thread's wakeup time reached or passed */
         if (__atomic_load_n(&Current->WakeupTime, __ATOMIC_SEQ_CST) <= CurrentTicks)
         {
             /* Remove thread from sleeping queue */
             if (Prev)
+            {
                 Prev->Next = Next;
+            }
             else
+            {
                 Scheduler->SleepingQueue = Next;
-            
+            }
+
             /* Clear wait reason and wakeup time atomically */
             __atomic_store_n(&Current->WaitReason, WaitReasonNone, __ATOMIC_SEQ_CST);
             __atomic_store_n(&Current->WakeupTime, 0, __ATOMIC_SEQ_CST);
-            
+
             /* Release lock temporarily to safely add to ready queue */
             ReleaseSpinLock(&Scheduler->SchedulerLock);
-            
+
             /* Add thread back to ready queue */
             AddThreadToReadyQueue(__CpuId__, Current);
-            
+
             /* Re-acquire lock and continue */
             AcquireSpinLock(&Scheduler->SchedulerLock);
         }
@@ -349,17 +391,17 @@ WakeupSleepingThreads(uint32_t __CpuId__)
             /* Move to next thread */
             Prev = Current;
         }
-        
+
         Current = Next;
     }
-    
+
     /* Release lock after processing all sleeping threads */
     ReleaseSpinLock(&Scheduler->SchedulerLock);
 }
 
 /**
  * @brief Cleanup Zombie Threads
- * 
+ *
  * @param __CpuId__ CPU identifier
  *
  * Removes all zombie threads from the queue for cleanup.
@@ -370,19 +412,21 @@ void
 CleanupZombieThreads(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return;
-        
+    }
+
     CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    
+
     /* Acquire spinlock before clearing zombie queue */
     AcquireSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* Extract zombie queue and clear it quickly under lock */
-    Thread* Current = Scheduler->ZombieQueue;
+    Thread* Current        = Scheduler->ZombieQueue;
     Scheduler->ZombieQueue = NULL;
-    
+
     ReleaseSpinLock(&Scheduler->SchedulerLock);
-    
+
     /* Destroy freed zombie threads outside the lock to avoid long lock holds */
     while (Current)
     {
@@ -394,7 +438,7 @@ CleanupZombieThreads(uint32_t __CpuId__)
 
 /**
  * @brief Initialize CPU Scheduler
- * 
+ *
  * @param __CpuId__ CPU identifier
  *
  * Setup scheduler data structures and counters for the given CPU.
@@ -405,19 +449,21 @@ void
 InitializeCpuScheduler(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return;
-        
+    }
+
     CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    
+
     /* Reset all thread queues to empty */
-    Scheduler->ReadyQueue = NULL;
-    Scheduler->WaitingQueue = NULL;
-    Scheduler->ZombieQueue = NULL;
+    Scheduler->ReadyQueue    = NULL;
+    Scheduler->WaitingQueue  = NULL;
+    Scheduler->ZombieQueue   = NULL;
     Scheduler->SleepingQueue = NULL;
     Scheduler->CurrentThread = NULL;
-    Scheduler->NextThread = NULL;
-    Scheduler->IdleThread = NULL;
-    
+    Scheduler->NextThread    = NULL;
+    Scheduler->IdleThread    = NULL;
+
     /* Reset all counters atomically */
     __atomic_store_n(&Scheduler->ThreadCount, 0, __ATOMIC_SEQ_CST);
     __atomic_store_n(&Scheduler->ReadyCount, 0, __ATOMIC_SEQ_CST);
@@ -426,30 +472,32 @@ InitializeCpuScheduler(uint32_t __CpuId__)
     __atomic_store_n(&Scheduler->LoadAverage, 0, __ATOMIC_SEQ_CST);
     __atomic_store_n(&Scheduler->ScheduleTicks, 0, __ATOMIC_SEQ_CST);
     __atomic_store_n(&Scheduler->LastSchedule, 0, __ATOMIC_SEQ_CST);
-    
+
     /* Initialize spinlock with identifier for debug */
     InitializeSpinLock(&Scheduler->SchedulerLock, "CpuScheduler");
-    
+
     PDebug("CPU %u scheduler initialized\n", __CpuId__);
 }
 
 /**
  * @brief Save Interrupt Frame to Thread Context
- * 
+ *
  * @param __ThreadPtr__ Thread to save context to
  * @param __Frame__ Interrupt frame providing CPU register context
  *
  * Copies CPU register state from the interrupt frame to the thread's saved context.
  * This captures the thread's execution state before a context switch.
  */
-void 
+void
 SaveInterruptFrameToThread(Thread* __ThreadPtr__, InterruptFrame* __Frame__)
 {
     if (!__ThreadPtr__ || !__Frame__)
+    {
         return;
-        
+    }
+
     ThreadContext* Context = &__ThreadPtr__->Context;
-    
+
     /* Save general-purpose registers */
     Context->Rax = __Frame__->Rax;
     Context->Rbx = __Frame__->Rbx;
@@ -466,32 +514,43 @@ SaveInterruptFrameToThread(Thread* __ThreadPtr__, InterruptFrame* __Frame__)
     Context->R13 = __Frame__->R13;
     Context->R14 = __Frame__->R14;
     Context->R15 = __Frame__->R15;
-    
+
     /* Save execution state registers */
-    Context->Rip = __Frame__->Rip;
-    Context->Rsp = __Frame__->Rsp;
+    Context->Rip    = __Frame__->Rip;
+    Context->Rsp    = __Frame__->Rsp;
     Context->Rflags = __Frame__->Rflags;
-    Context->Cs = __Frame__->Cs;
-    Context->Ss = __Frame__->Ss;
+    Context->Cs     = __Frame__->Cs;
+    Context->Ss     = __Frame__->Ss;
 }
 
 /**
  * @brief Load Thread Context to Interrupt Frame
- * 
+ *
  * @param __ThreadPtr__ Thread to load context from
  * @param __Frame__ Interrupt frame to populate with register context
  *
  * Loads saved CPU register state from the thread context into the interrupt frame.
  * Used to restore thread state on a context switch in.
  */
-void 
+void
 LoadThreadContextToInterruptFrame(Thread* __ThreadPtr__, InterruptFrame* __Frame__)
 {
     if (!__ThreadPtr__ || !__Frame__)
+    {
         return;
-        
+    }
+
+    uint64_t __Pd__ = __ThreadPtr__->PageDirectory;
+    if (__Pd__)
+    {
+        __asm__ volatile("mov %0, %%cr3" ::"r"(__Pd__) : "memory");
+    }
+
+    /*FPU*/
+    ThreadFxRestore(__ThreadPtr__->Context.FpuState);
+
     ThreadContext* Context = &__ThreadPtr__->Context;
-    
+
     /* Load general-purpose registers into interrupt frame */
     __Frame__->Rax = Context->Rax;
     __Frame__->Rbx = Context->Rbx;
@@ -508,21 +567,21 @@ LoadThreadContextToInterruptFrame(Thread* __ThreadPtr__, InterruptFrame* __Frame
     __Frame__->R13 = Context->R13;
     __Frame__->R14 = Context->R14;
     __Frame__->R15 = Context->R15;
-    
+
     /* Load execution state registers */
-    __Frame__->Rip = Context->Rip;
-    __Frame__->Rsp = Context->Rsp;
+    __Frame__->Rip    = Context->Rip;
+    __Frame__->Rsp    = Context->Rsp;
     __Frame__->Rflags = Context->Rflags;
-    __Frame__->Cs = Context->Cs;
-    __Frame__->Ss = Context->Ss;
+    __Frame__->Cs     = Context->Cs;
+    __Frame__->Ss     = Context->Ss;
 }
 
 /**
  * @brief Schedule Thread (Per-CPU)
- * 
+ *
  * @param __CpuId__ CPU identifier to perform scheduling on
  * @param __Frame__ Interrupt frame to save/restore thread context
- * 
+ *
  * This function selects the next thread to run on the CPU.
  * Implements a preemptive priority-based scheduling with frequency cooldown.
  * Handles context saving for current thread, state transitions, waking sleepers,
@@ -533,23 +592,28 @@ void
 Schedule(uint32_t __CpuId__, InterruptFrame* __Frame__)
 {
     if (__CpuId__ >= MaxCPUs || !__Frame__)
+    {
         return;
-        
-    CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    Thread* Current = Scheduler->CurrentThread;
-    Thread* NextThread = NULL;
-    
+    }
+
+    CpuScheduler* Scheduler  = &CpuSchedulers[__CpuId__];
+    Thread*       Current    = Scheduler->CurrentThread;
+    Thread*       NextThread = NULL;
+
     /* Update scheduler tick counters */
     __atomic_fetch_add(&Scheduler->ScheduleTicks, 1, __ATOMIC_SEQ_CST);
     __atomic_store_n(&Scheduler->LastSchedule, GetSystemTicks(), __ATOMIC_SEQ_CST);
-    
+
     /* If there is a currently running thread */
     if (Current)
     {
+        /*FPU*/
+        ThreadFxSave(Current->Context.FpuState);
+
         /* Save current thread's CPU context */
         SaveInterruptFrameToThread(Current, __Frame__);
         __atomic_fetch_add(&Current->CpuTime, 1, __ATOMIC_SEQ_CST);
-        
+
         /* Handle current thread's state transitions */
         switch (Current->State)
         {
@@ -557,30 +621,30 @@ Schedule(uint32_t __CpuId__, InterruptFrame* __Frame__)
                 /* Thread was preempted normally, add it back to ready queue */
                 AddThreadToReadyQueue(__CpuId__, Current);
                 break;
-                
+
             case ThreadStateTerminated:
                 /* Thread has finished, move it to zombie queue */
                 RemoveThreadFromReadyQueue(__CpuId__);
                 AddThreadToZombieQueue(__CpuId__, Current);
                 break;
-                
+
             case ThreadStateBlocked:
                 /* Thread is waiting for I/O or resource, move to waiting queue */
                 RemoveThreadFromReadyQueue(__CpuId__);
                 AddThreadToWaitingQueue(__CpuId__, Current);
                 break;
-                
+
             case ThreadStateSleeping:
                 /* Thread is sleeping, add it to sleeping queue */
                 RemoveThreadFromReadyQueue(__CpuId__);
                 AddThreadToSleepingQueue(__CpuId__, Current);
                 break;
-                
+
             case ThreadStateReady:
                 /* Thread yielded CPU voluntarily, add back to ready queue */
                 AddThreadToReadyQueue(__CpuId__, Current);
                 break;
-                
+
             default:
                 /* Unknown state, safeguard by marking ready and enqueue */
                 Current->State = ThreadStateReady;
@@ -592,13 +656,13 @@ Schedule(uint32_t __CpuId__, InterruptFrame* __Frame__)
 SelectAgain:
     /* Attempt to wake up any sleeping threads whose timeout expired */
     WakeupSleepingThreads(__CpuId__);
-    
+
     /* Cleanup any zombie threads */
     CleanupZombieThreads(__CpuId__);
-    
+
     /* Select next thread from ready queue */
     NextThread = RemoveThreadFromReadyQueue(__CpuId__);
-    
+
     /* If no ready thread exists, CPU is idle */
     if (!NextThread)
     {
@@ -618,7 +682,7 @@ SelectAgain:
         NextThread->Context.Cs = KernelCodeSelector;
         NextThread->Context.Ss = KernelDataSelector;
     }
-    
+
     /* Determine frequency stride based on thread priority */
     uint32_t Stride = 1;
     switch (NextThread->Priority)
@@ -627,26 +691,42 @@ SelectAgain:
          * NOTE: Priority MAY vary based on CPU load.
          * Threads on least loaded CPUs may not be restricted by priority.
          */
-        case ThreadPrioritykernel: Stride = 1;  break; /* Kernel threads run constantly */
-        case ThreadPrioritySuper:  Stride = 2;  break;
-        case ThreadPriorityUltra:  Stride = 4;  break;
-        case ThreadPriorityHigh:   Stride = 8;  break;
-        case ThreadPriorityNormal: Stride = 16; break;
-        case ThreadPriorityLow:    Stride = 32; break;
-        case ThreadPriorityIdle:   Stride = 64; break;
+        case ThreadPrioritykernel:
+            Stride = 1;
+            break; /* Kernel threads run constantly */
+        case ThreadPrioritySuper:
+            Stride = 2;
+            break;
+        case ThreadPriorityUltra:
+            Stride = 4;
+            break;
+        case ThreadPriorityHigh:
+            Stride = 8;
+            break;
+        case ThreadPriorityNormal:
+            Stride = 16;
+            break;
+        case ThreadPriorityLow:
+            Stride = 32;
+            break;
+        case ThreadPriorityIdle:
+            Stride = 64;
+            break;
 
-        default: Stride = 16; break; /* Default to normal priority */
+        default:
+            Stride = 16;
+            break; /* Default to normal priority */
     }
-    
+
     /* Frequency scheduling cooldown to prevent over-scheduling lower priority threads */
     if (__atomic_load_n(&NextThread->Cooldown, __ATOMIC_SEQ_CST) > 0)
     {
         /* Thread is cooling down, decrement cooldown counter */
         __atomic_fetch_sub(&NextThread->Cooldown, 1, __ATOMIC_SEQ_CST);
-        
+
         /* Reinsert thread at end of ready queue */
         AddThreadToReadyQueue(__CpuId__, NextThread);
-        
+
         /* Select another thread to run */
         goto SelectAgain;
     }
@@ -655,27 +735,27 @@ SelectAgain:
         /* Thread is ready, reset cooldown count */
         __atomic_store_n(&NextThread->Cooldown, Stride - 1, __ATOMIC_SEQ_CST);
     }
-    
+
     /* Set the selected thread as current running and update state */
     Scheduler->CurrentThread = NextThread;
-    NextThread->State = ThreadStateRunning;
-    NextThread->LastCpu = __CpuId__;
+    NextThread->State        = ThreadStateRunning;
+    NextThread->LastCpu      = __CpuId__;
     __atomic_store_n(&NextThread->StartTime, GetSystemTicks(), __ATOMIC_SEQ_CST);
-    
+
     /* Update context switch statistics */
     __atomic_fetch_add(&Scheduler->ContextSwitches, 1, __ATOMIC_SEQ_CST);
     __atomic_fetch_add(&NextThread->ContextSwitches, 1, __ATOMIC_SEQ_CST);
-    
+
     /* Load the next thread's saved context into the interrupt frame */
     LoadThreadContextToInterruptFrame(NextThread, __Frame__);
-    
+
     /* Update current thread reference for the CPU */
     SetCurrentThread(__CpuId__, NextThread);
 }
 
 /**
  * @brief Dump CPU Scheduler Info
- * 
+ *
  * @param __CpuId__ CPU identifier
  *
  * Logs detailed scheduler state including thread counts, ready queues,
@@ -685,30 +765,32 @@ void
 DumpCpuSchedulerInfo(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
+    {
         return;
-        
+    }
+
     CpuScheduler* Scheduler = &CpuSchedulers[__CpuId__];
-    
+
     PInfo("CPU %u Scheduler:\n", __CpuId__);
-    PInfo("  Threads: %u, Ready: %u\n", 
-    __atomic_load_n(&Scheduler->ThreadCount, __ATOMIC_SEQ_CST),
-    __atomic_load_n(&Scheduler->ReadyCount, __ATOMIC_SEQ_CST));
-    PInfo("  Context Switches: %llu\n", 
-    __atomic_load_n(&Scheduler->ContextSwitches, __ATOMIC_SEQ_CST));
-    PInfo("  Current Thread: %u\n", 
-    Scheduler->CurrentThread ? Scheduler->CurrentThread->ThreadId : 0);
+    PInfo("  Threads: %u, Ready: %u\n",
+          __atomic_load_n(&Scheduler->ThreadCount, __ATOMIC_SEQ_CST),
+          __atomic_load_n(&Scheduler->ReadyCount, __ATOMIC_SEQ_CST));
+    PInfo("  Context Switches: %llu\n",
+          __atomic_load_n(&Scheduler->ContextSwitches, __ATOMIC_SEQ_CST));
+    PInfo("  Current Thread: %u\n",
+          Scheduler->CurrentThread ? Scheduler->CurrentThread->ThreadId : 0);
 }
 
 /**
  * @brief Dump All Schedulers
- * 
+ *
  * Prints scheduler info of all CPUs present in the system.
  */
 void
 DumpAllSchedulers(void)
 {
     PInfo("=== Scheduler Status ===\n");
-    
+
     for (uint32_t CpuIndex = 0; CpuIndex < Smp.CpuCount; CpuIndex++)
     {
         DumpCpuSchedulerInfo(CpuIndex);
@@ -717,7 +799,7 @@ DumpAllSchedulers(void)
 
 /**
  * @brief Get Next Thread to Run
- * 
+ *
  * @param __CpuId__ CPU identifier
  * @return Pointer to next thread removed from ready queue
  *
@@ -731,18 +813,18 @@ GetNextThread(uint32_t __CpuId__)
 
 /**
  * @brief Global Scheduler Initialization
- * 
+ *
  * Initializes the scheduler on all CPUs detected by SMP.
  * Sets up per-CPU data structures and queues.
  * Prints success message on completion.
  */
-void 
+void
 InitializeScheduler(void)
 {
     for (uint32_t CpuIndex = 0; CpuIndex < Smp.CpuCount; CpuIndex++)
     {
         InitializeCpuScheduler(CpuIndex);
     }
-    
+
     PSuccess("Scheduler initialized for %u CPUs\n", Smp.CpuCount);
 }

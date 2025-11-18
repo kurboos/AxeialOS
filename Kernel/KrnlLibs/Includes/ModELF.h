@@ -7,8 +7,7 @@
  */
 
 /*Section Header*/
-typedef
-struct
+typedef struct
 {
 
     uint32_t sh_name;
@@ -25,8 +24,7 @@ struct
 } Elf64_Shdr;
 
 /*ELF Header*/
-typedef
-struct
+typedef struct
 {
 
     unsigned char e_ident[16]; /* ELF identification bytes */
@@ -47,8 +45,7 @@ struct
 } Elf64_Ehdr;
 
 /*Section set*/
-typedef
-struct __ElfSectionSet__
+typedef struct __ElfSectionSet__
 {
     long Text;
     long Rodata;
@@ -67,69 +64,64 @@ struct __ElfSectionSet__
 } __ElfSectionSet__;
 
 /*Symbols*/
-typedef
-struct
+typedef struct
 {
 
-    uint32_t st_name;   /* Index into .strtab */
+    uint32_t      st_name; /* Index into .strtab */
     unsigned char st_info; /* Symbol type and binding */
     unsigned char st_other;
-    uint16_t st_shndx;  /* Section index */
-    uint64_t st_value;  /* Symbol value (offset or absolute) */
-    uint64_t st_size;   /* Size of symbol */
+    uint16_t      st_shndx; /* Section index */
+    uint64_t      st_value; /* Symbol value (offset or absolute) */
+    uint64_t      st_size;  /* Size of symbol */
 
 } Elf64_Sym;
 
 /*Rellocate*/
-typedef
-struct __ElfSymbol__
+typedef struct __ElfSymbol__
 {
 
-    const char *Name;
-    uint64_t    Value;
-	uint64_t	ResolvedAddr;
-    uint16_t    Shndx;
+    const char*   Name;
+    uint64_t      Value;
+    uint64_t      ResolvedAddr;
+    uint16_t      Shndx;
     unsigned char Info;
 
 } __ElfSymbol__;
 
 /* ELF64 relocation with addend */
-typedef
-struct
+typedef struct
 {
 
-    uint64_t r_offset;  /* Location to apply relocation */
-    uint64_t r_info;    /* Symbol index and type */
-    int64_t  r_addend;  /* Constant addend */
+    uint64_t r_offset; /* Location to apply relocation */
+    uint64_t r_info;   /* Symbol index and type */
+    int64_t  r_addend; /* Constant addend */
 
 } Elf64_Rela;
 
 /* ELF64 relocation without addend */
-typedef
-struct
+typedef struct
 {
-    uint64_t r_offset;  /* Location to apply relocation */
-    uint64_t r_info;    /* Symbol index and type */
+    uint64_t r_offset; /* Location to apply relocation */
+    uint64_t r_info;   /* Symbol index and type */
 } Elf64_Rel;
 
 /*Module*/
-typedef
-struct ModImage
+typedef struct ModImage
 {
 
-    uint8_t *Text;
+    uint8_t* Text;
     long     TextSz;
 
-    uint8_t *Rodata;
+    uint8_t* Rodata;
     long     RodataSz;
 
-    uint8_t *Data;
+    uint8_t* Data;
     long     DataSz;
 
-    uint8_t *Bss;
+    uint8_t* Bss;
     long     BssSz;
 
-    __ElfSymbol__ *Symbols;
+    __ElfSymbol__* Symbols;
     long           SymCount;
 
     uint64_t InitAddr;
@@ -138,11 +130,12 @@ struct ModImage
 } ModImage;
 
 /* Extract symbol index and type from r_info */
-#define ELF64_R_SYM(i)   ((i) >> 32)
-#define ELF64_R_TYPE(i)  ((uint32_t)(i))
+#define ELF64_R_SYM(I)  ((I) >> 32)
+#define ELF64_R_TYPE(I) ((uint32_t)(I))
 
 /**
  * Functions
  */
-int InstallModule(const char *__Path__);
-int UnInstallModule(const char *__Path__);
+int  InstallModule(const char* __Path__);
+int  UnInstallModule(const char* __Path__);
+void InitRamDiskDevDrvs(void);

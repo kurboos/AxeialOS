@@ -1,5 +1,5 @@
-#include <RamFs.h>
 #include <KHeap.h>
+#include <RamFs.h>
 
 /**
  * @brief Allocate and initialize a new RamFS node
@@ -15,22 +15,26 @@
  * @note Child array is initialized but empty; use RamFSAddChild to populate
  */
 RamFSNode*
-RamFSCreateNode(const char *__Name__, RamFSNodeType __Type__)
+RamFSCreateNode(const char* __Name__, RamFSNodeType __Type__)
 {
-    RamFSNode *Node = (RamFSNode*)KMalloc(sizeof(RamFSNode));
+    RamFSNode* Node = (RamFSNode*)KMalloc(sizeof(RamFSNode));
 
     if (!Node)
+    {
         return 0;
+    }
 
-    Node->Next       = 0;                                    /**< Next sibling (unused) */
-    for (uint32_t I = 0; I < RamFSMaxChildren; I++)         /**< Initialize child array */
+    Node->Next = 0;                                 /**< Next sibling (unused) */
+    for (uint32_t I = 0; I < RamFSMaxChildren; I++) /**< Initialize child array */
+    {
         Node->Children[I] = 0;
-    Node->ChildCount = 0;                                   /**< No children initially */
-    Node->Name       = __Name__;                             /**< Node name */
-    Node->Type       = __Type__;                             /**< File or directory */
-    Node->Size       = 0;                                   /**< Size (0 for directories) */
-    Node->Data       = 0;                                   /**< Data pointer (NULL for directories) */
-    Node->Magic      = RamFSNodeMagic;                      /**< Integrity check */
+    }
+    Node->ChildCount = 0;              /**< No children initially */
+    Node->Name       = __Name__;       /**< Node name */
+    Node->Type       = __Type__;       /**< File or directory */
+    Node->Size       = 0;              /**< Size (0 for directories) */
+    Node->Data       = 0;              /**< Data pointer (NULL for directories) */
+    Node->Magic      = RamFSNodeMagic; /**< Integrity check */
 
     return Node;
 }
@@ -49,13 +53,15 @@ RamFSCreateNode(const char *__Name__, RamFSNodeType __Type__)
  * @note Fixed-size array prevents unlimited directory growth
  */
 void
-RamFSAddChild(RamFSNode *__Parent__, RamFSNode *__Child__)
+RamFSAddChild(RamFSNode* __Parent__, RamFSNode* __Child__)
 {
     if (!__Parent__ || !__Child__)
+    {
         return;
+    }
 
     if (__Parent__->ChildCount < RamFSMaxChildren)
-	{
+    {
         __Parent__->Children[__Parent__->ChildCount++] = __Child__;
     }
 }
@@ -76,7 +82,7 @@ RamFSNode*
 RamFSEnsureRoot(void)
 {
     if (!RamFS.Root)
-	{
+    {
         /* Root name is "/" (literal string, not allocated) */
         RamFS.Root = RamFSCreateNode("/", RamFSNode_Directory);
     }

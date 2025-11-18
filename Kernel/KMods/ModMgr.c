@@ -1,13 +1,13 @@
 #include <AllTypes.h>
-#include <VFS.h>
-#include <KrnPrintf.h>
 #include <KHeap.h>
-#include <String.h>
-#include <ModMemMgr.h>
 #include <KMods.h>
+#include <KrnPrintf.h>
+#include <ModMemMgr.h>
+#include <String.h>
+#include <VFS.h>
 
 /*Globals*/
-ModuleRecord *ModuleListHead = 0;
+ModuleRecord* ModuleListHead = 0;
 
 /**
  * @brief Initialize the module registry
@@ -32,7 +32,7 @@ ModuleRegistryInit(void)
  * @return 0 on success, -1 on failure
  */
 int
-ModuleRegistryAdd(ModuleRecord *__Rec__)
+ModuleRegistryAdd(ModuleRecord* __Rec__)
 {
     if (!__Rec__)
     {
@@ -40,7 +40,7 @@ ModuleRegistryAdd(ModuleRecord *__Rec__)
         return -1;
     }
 
-    __Rec__->Next = ModuleListHead;
+    __Rec__->Next  = ModuleListHead;
     ModuleListHead = __Rec__;
     return 0;
 }
@@ -53,8 +53,8 @@ ModuleRegistryAdd(ModuleRecord *__Rec__)
  * @param __Name__ Module name/path string
  * @return Pointer to ModuleRecord on success, NULL if not found
  */
-ModuleRecord *
-ModuleRegistryFind(const char *__Name__)
+ModuleRecord*
+ModuleRegistryFind(const char* __Name__)
 {
     if (!__Name__)
     {
@@ -62,11 +62,13 @@ ModuleRegistryFind(const char *__Name__)
         return 0;
     }
 
-    ModuleRecord *It = ModuleListHead;
+    ModuleRecord* It = ModuleListHead;
     while (It)
     {
         if (It->Name && strcmp(It->Name, __Name__) == 0)
+        {
             return It;
+        }
         It = It->Next;
     }
     return 0;
@@ -81,7 +83,7 @@ ModuleRegistryFind(const char *__Name__)
  * @return 0 on success, -1 if not found
  */
 int
-ModuleRegistryRemove(ModuleRecord *__Rec__)
+ModuleRegistryRemove(ModuleRecord* __Rec__)
 {
     if (!__Rec__)
     {
@@ -89,20 +91,25 @@ ModuleRegistryRemove(ModuleRecord *__Rec__)
         return -1;
     }
 
-    ModuleRecord *Prev = 0;
-    ModuleRecord *It = ModuleListHead;
+    ModuleRecord* Prev = 0;
+    ModuleRecord* It   = ModuleListHead;
     while (It)
     {
         if (It == __Rec__)
         {
-            if (Prev) Prev->Next = It->Next;
-            else ModuleListHead = It->Next;
+            if (Prev)
+            {
+                Prev->Next = It->Next;
+            }
+            else
+            {
+                ModuleListHead = It->Next;
+            }
             return 0;
         }
         Prev = It;
-        It = It->Next;
+        It   = It->Next;
     }
     PError("MOD: Registry remove not found\n");
     return -1;
 }
-

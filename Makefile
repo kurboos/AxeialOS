@@ -25,6 +25,7 @@ AxeKrnl:
 	@mkdir -p $(BuildDirectory) $(EFIRoot)
 	
 	@$(MAKE) -C Kernel
+	@$(MAKE) -C SysApps
 	@$(MAKE) -C BootImg
 
 	@cp $(AxeKrnl) $(EFIRoot)/axekrnl
@@ -52,7 +53,10 @@ VboxVDIImage: AxeKrnl
 	@sudo cp -r $(EFIRoot)/* /mnt/
 	@sudo umount /mnt
 	@sudo losetup -d /dev/loop0
-	@VBoxManage convertfromraw $(AlternateDiskImage) $(VboxVDIBootable) --format VDI --uuid {$(TestUUID)}
+	@VBoxManage convertfromraw $(AlternateDiskImage) $(VboxVDIBootable) --format VDI --uuid
+	{
+	    $(TestUUID)
+	}
 #	@rm $(AlternateDiskImage)
 
 clean:
@@ -64,3 +68,4 @@ clean:
 	@rm -rf $(BuildDirectory)
 	@$(MAKE) -C Kernel clean
 	@$(MAKE) -C BootImg clean
+	@$(MAKE) -C SysApps clean

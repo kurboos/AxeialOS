@@ -15,7 +15,7 @@
  * @return void
  */
 void
-KrnPrintf(const char *__Format__, ...)
+KrnPrintf(const char* __Format__, ...)
 {
     AcquireSpinLock(&ConsoleLock);
     __builtin_va_list args;
@@ -53,7 +53,7 @@ KrnPrintf(const char *__Format__, ...)
  * @return void
  */
 void
-KrnPrintfColor(uint32_t __FG__, uint32_t __BG__, const char *__Format__, ...)
+KrnPrintfColor(uint32_t __FG__, uint32_t __BG__, const char* __Format__, ...)
 {
     AcquireSpinLock(&ConsoleLock);
     uint32_t OldFG = Console.TXColor;
@@ -96,7 +96,7 @@ KrnPrintfColor(uint32_t __FG__, uint32_t __BG__, const char *__Format__, ...)
  * @return void
  */
 void
-ProcessFormatSpecifier(const char **__Format__, __builtin_va_list *__Args__)
+ProcessFormatSpecifier(const char** __Format__, __builtin_va_list* __Args__)
 {
     FormatFlags Flags = {0};
 
@@ -105,12 +105,28 @@ ProcessFormatSpecifier(const char **__Format__, __builtin_va_list *__Args__)
     {
         switch (**__Format__)
         {
-            case '-': Flags.LeftAlign = 1; (*__Format__)++; continue;
-            case '+': Flags.ShowSign = 1; (*__Format__)++; continue;
-            case ' ': Flags.SpacePrefix = 1; (*__Format__)++; continue;
-            case '#': Flags.AlternateForm = 1; (*__Format__)++; continue;
-            case '0': Flags.ZeroPad = 1; (*__Format__)++; continue;
-            default: break;
+            case '-':
+                Flags.LeftAlign = 1;
+                (*__Format__)++;
+                continue;
+            case '+':
+                Flags.ShowSign = 1;
+                (*__Format__)++;
+                continue;
+            case ' ':
+                Flags.SpacePrefix = 1;
+                (*__Format__)++;
+                continue;
+            case '#':
+                Flags.AlternateForm = 1;
+                (*__Format__)++;
+                continue;
+            case '0':
+                Flags.ZeroPad = 1;
+                (*__Format__)++;
+                continue;
+            default:
+                break;
         }
         break;
     }
@@ -150,7 +166,7 @@ ProcessFormatSpecifier(const char **__Format__, __builtin_va_list *__Args__)
         }
     }
 
-    /* Parse length modifiers: hh, h, l, ll, z, t, j */
+    /* Parse length modifiers: hh, h, l, ll, z, t, J */
     switch (**__Format__)
     {
         case 'l':
@@ -161,7 +177,9 @@ ProcessFormatSpecifier(const char **__Format__, __builtin_va_list *__Args__)
                 (*__Format__)++;
             }
             else
+            {
                 Flags.Length = 1; /* l */
+            }
             break;
         case 'h':
             (*__Format__)++;
@@ -171,18 +189,29 @@ ProcessFormatSpecifier(const char **__Format__, __builtin_va_list *__Args__)
                 (*__Format__)++;
             }
             else
+            {
                 Flags.Length = -1; /* h */
+            }
             break;
-        case 'z': Flags.Length = 3; (*__Format__)++; break;
-        case 't': Flags.Length = 4; (*__Format__)++; break;
-        case 'j': Flags.Length = 5; (*__Format__)++; break;
+        case 'z':
+            Flags.Length = 3;
+            (*__Format__)++;
+            break;
+        case 't':
+            Flags.Length = 4;
+            (*__Format__)++;
+            break;
+        case 'J':
+            Flags.Length = 5;
+            (*__Format__)++;
+            break;
     }
 
     /* Process the conversion specifier */
     switch (**__Format__)
     {
         case 'd':
-        case 'i':
+        case 'I':
             ProcessInteger(__Args__, &Flags, 10, 1);
             break;
         case 'u':
@@ -210,7 +239,7 @@ ProcessFormatSpecifier(const char **__Format__, __builtin_va_list *__Args__)
         case 'p':
             ProcessPointer(__Args__, &Flags);
             break;
-        case 'n':
+        case 'N':
             /* Not implemented for security reasons */
             break;
         case 'f':
@@ -249,43 +278,69 @@ ProcessFormatSpecifier(const char **__Format__, __builtin_va_list *__Args__)
  * @return void
  */
 void
-ProcessInteger(__builtin_va_list *__Args__, FormatFlags *__Flags__, int __Base__, int __Signed__)
+ProcessInteger(__builtin_va_list* __Args__, FormatFlags* __Flags__, int __Base__, int __Signed__)
 {
-    char Buffer[64];
-    int64_t Value = 0;
-    uint64_t UValue = 0;
-    int IsNegative = 0;
+    char     Buffer[64];
+    int64_t  Value      = 0;
+    uint64_t UValue     = 0;
+    int      IsNegative = 0;
 
     /* Extract value based on length modifier and signedness */
     if (__Signed__)
     {
         switch (__Flags__->Length)
         {
-            case -2: Value = (signed char)__builtin_va_arg(*__Args__, int); break;
-            case -1: Value = (short)__builtin_va_arg(*__Args__, int); break;
-            case 0:  Value = __builtin_va_arg(*__Args__, int); break;
-            case 1:  Value = __builtin_va_arg(*__Args__, long); break;
-            case 2:  Value = __builtin_va_arg(*__Args__, long long); break;
-            default: Value = __builtin_va_arg(*__Args__, int); break;
+            case -2:
+                Value = (signed char)__builtin_va_arg(*__Args__, int);
+                break;
+            case -1:
+                Value = (short)__builtin_va_arg(*__Args__, int);
+                break;
+            case 0:
+                Value = __builtin_va_arg(*__Args__, int);
+                break;
+            case 1:
+                Value = __builtin_va_arg(*__Args__, long);
+                break;
+            case 2:
+                Value = __builtin_va_arg(*__Args__, long long);
+                break;
+            default:
+                Value = __builtin_va_arg(*__Args__, int);
+                break;
         }
         if (Value < 0)
         {
             IsNegative = 1;
-            UValue = -Value;
+            UValue     = -Value;
         }
         else
+        {
             UValue = Value;
+        }
     }
     else
     {
         switch (__Flags__->Length)
         {
-            case -2: UValue = (unsigned char)__builtin_va_arg(*__Args__, unsigned int); break;
-            case -1: UValue = (unsigned short)__builtin_va_arg(*__Args__, unsigned int); break;
-            case 0:  UValue = __builtin_va_arg(*__Args__, unsigned int); break;
-            case 1:  UValue = __builtin_va_arg(*__Args__, unsigned long); break;
-            case 2:  UValue = __builtin_va_arg(*__Args__, unsigned long long); break;
-            default: UValue = __builtin_va_arg(*__Args__, unsigned int); break;
+            case -2:
+                UValue = (unsigned char)__builtin_va_arg(*__Args__, unsigned int);
+                break;
+            case -1:
+                UValue = (unsigned short)__builtin_va_arg(*__Args__, unsigned int);
+                break;
+            case 0:
+                UValue = __builtin_va_arg(*__Args__, unsigned int);
+                break;
+            case 1:
+                UValue = __builtin_va_arg(*__Args__, unsigned long);
+                break;
+            case 2:
+                UValue = __builtin_va_arg(*__Args__, unsigned long long);
+                break;
+            default:
+                UValue = __builtin_va_arg(*__Args__, unsigned int);
+                break;
         }
     }
 
@@ -308,31 +363,42 @@ ProcessInteger(__builtin_va_list *__Args__, FormatFlags *__Flags__, int __Base__
  * @return void
  */
 void
-ProcessString(__builtin_va_list *__Args__, FormatFlags *__Flags__)
+ProcessString(__builtin_va_list* __Args__, FormatFlags* __Flags__)
 {
-    const char *Str = __builtin_va_arg(*__Args__, const char*);
-    if (!Str) Str = "(null)";
+    const char* Str = __builtin_va_arg(*__Args__, const char*);
+    if (!Str)
+    {
+        Str = "(null)";
+    }
 
     int Len = StringLength(Str);
     if (__Flags__->HasPrecision && __Flags__->Precision < Len)
+    {
         Len = __Flags__->Precision;
+    }
 
     /* Right-align padding */
     if (!__Flags__->LeftAlign && __Flags__->Width > Len)
     {
-        for (int i = 0; i < __Flags__->Width - Len; i++)
+        for (int I = 0; I < __Flags__->Width - Len; I++)
+        {
             PutChar(' ');
+        }
     }
 
     /* Output string characters */
-    for (int i = 0; i < Len; i++)
-        PutChar(Str[i]);
+    for (int I = 0; I < Len; I++)
+    {
+        PutChar(Str[I]);
+    }
 
     /* Left-align padding */
     if (__Flags__->LeftAlign && __Flags__->Width > Len)
     {
-        for (int i = 0; i < __Flags__->Width - Len; i++)
+        for (int I = 0; I < __Flags__->Width - Len; I++)
+        {
             PutChar(' ');
+        }
     }
 }
 
@@ -347,15 +413,17 @@ ProcessString(__builtin_va_list *__Args__, FormatFlags *__Flags__)
  * @return void
  */
 void
-ProcessChar(__builtin_va_list *__Args__, FormatFlags *__Flags__)
+ProcessChar(__builtin_va_list* __Args__, FormatFlags* __Flags__)
 {
     char Ch = (char)__builtin_va_arg(*__Args__, int);
 
     /* Right-align padding */
     if (!__Flags__->LeftAlign && __Flags__->Width > 1)
     {
-        for (int i = 0; i < __Flags__->Width - 1; i++)
+        for (int I = 0; I < __Flags__->Width - 1; I++)
+        {
             PutChar(' ');
+        }
     }
 
     PutChar(Ch);
@@ -363,8 +431,10 @@ ProcessChar(__builtin_va_list *__Args__, FormatFlags *__Flags__)
     /* Left-align padding */
     if (__Flags__->LeftAlign && __Flags__->Width > 1)
     {
-        for (int i = 0; i < __Flags__->Width - 1; i++)
+        for (int I = 0; I < __Flags__->Width - 1; I++)
+        {
             PutChar(' ');
+        }
     }
 }
 
@@ -379,10 +449,10 @@ ProcessChar(__builtin_va_list *__Args__, FormatFlags *__Flags__)
  * @return void
  */
 void
-ProcessPointer(__builtin_va_list *__Args__, FormatFlags *__Flags__)
+ProcessPointer(__builtin_va_list* __Args__, FormatFlags* __Flags__)
 {
-    void *Ptr = __builtin_va_arg(*__Args__, void*);
-    char Buffer[32];
+    void* Ptr = __builtin_va_arg(*__Args__, void*);
+    char  Buffer[32];
 
     PutPrint("0x");
     UnsignedToStringEx((uintptr_t)Ptr, Buffer, 16, 0);
@@ -400,19 +470,25 @@ ProcessPointer(__builtin_va_list *__Args__, FormatFlags *__Flags__)
  * @return void
  */
 void
-FormatOutput(const char *__Buffer__, FormatFlags *__Flags__, int __IsNegative__, int __Base__)
+FormatOutput(const char* __Buffer__, FormatFlags* __Flags__, int __IsNegative__, int __Base__)
 {
-    int Len = StringLength(__Buffer__);
-    int PrefixLen = 0;
+    int  Len       = StringLength(__Buffer__);
+    int  PrefixLen = 0;
     char Prefix[4] = {0};
 
     /* Build sign/space prefix */
     if (__IsNegative__)
+    {
         Prefix[PrefixLen++] = '-';
+    }
     else if (__Flags__->ShowSign)
+    {
         Prefix[PrefixLen++] = '+';
+    }
     else if (__Flags__->SpacePrefix)
+    {
         Prefix[PrefixLen++] = ' ';
+    }
 
     /* Build alternate form prefix */
     if (__Flags__->AlternateForm)
@@ -423,28 +499,36 @@ FormatOutput(const char *__Buffer__, FormatFlags *__Flags__, int __IsNegative__,
             Prefix[PrefixLen++] = 'x';
         }
         else if (__Base__ == 8 && __Buffer__[0] != '0')
+        {
             Prefix[PrefixLen++] = '0';
+        }
     }
 
     int TotalLen = Len + PrefixLen;
-    int PadLen = (__Flags__->Width > TotalLen) ? __Flags__->Width - TotalLen : 0;
+    int PadLen   = (__Flags__->Width > TotalLen) ? __Flags__->Width - TotalLen : 0;
 
     /* Left padding (spaces) */
     if (!__Flags__->LeftAlign && !__Flags__->ZeroPad)
     {
-        for (int i = 0; i < PadLen; i++)
+        for (int I = 0; I < PadLen; I++)
+        {
             PutChar(' ');
+        }
     }
 
     /* Output prefix */
-    for (int i = 0; i < PrefixLen; i++)
-        PutChar(Prefix[i]);
+    for (int I = 0; I < PrefixLen; I++)
+    {
+        PutChar(Prefix[I]);
+    }
 
     /* Zero padding */
     if (!__Flags__->LeftAlign && __Flags__->ZeroPad)
     {
-        for (int i = 0; i < PadLen; i++)
+        for (int I = 0; I < PadLen; I++)
+        {
             PutChar('0');
+        }
     }
 
     /* Output the number */
@@ -453,8 +537,10 @@ FormatOutput(const char *__Buffer__, FormatFlags *__Flags__, int __IsNegative__,
     /* Right padding (spaces) */
     if (__Flags__->LeftAlign)
     {
-        for (int i = 0; i < PadLen; i++)
+        for (int I = 0; I < PadLen; I++)
+        {
             PutChar(' ');
+        }
     }
 }
 
@@ -472,14 +558,14 @@ FormatOutput(const char *__Buffer__, FormatFlags *__Flags__, int __IsNegative__,
  * @return void
  */
 void
-UnsignedToStringEx(uint64_t __Value__, char *__Buffer__, int __Base__, int __Uppercase__)
+UnsignedToStringEx(uint64_t __Value__, char* __Buffer__, int __Base__, int __Uppercase__)
 {
     int Iteration = 0;
 
     if (__Value__ == 0)
     {
         __Buffer__[Iteration++] = '0';
-        __Buffer__[Iteration] = '\0';
+        __Buffer__[Iteration]   = '\0';
         return;
     }
 
@@ -487,9 +573,13 @@ UnsignedToStringEx(uint64_t __Value__, char *__Buffer__, int __Base__, int __Upp
     {
         int Remainder = __Value__ % __Base__;
         if (Remainder > 9)
+        {
             __Buffer__[Iteration++] = (Remainder - 10) + (__Uppercase__ ? 'A' : 'a');
+        }
         else
+        {
             __Buffer__[Iteration++] = Remainder + '0';
+        }
         __Value__ = __Value__ / __Base__;
     }
 
@@ -500,7 +590,8 @@ UnsignedToStringEx(uint64_t __Value__, char *__Buffer__, int __Base__, int __Upp
 /**
  * @brief Print an integer in the given base.
  */
-void PrintInteger(int __Value__, int __Base__, int __Uppercase__)
+void
+PrintInteger(int __Value__, int __Base__, int __Uppercase__)
 {
     char Buffer[32];
     IntegerToString(__Value__, Buffer, __Base__);
@@ -510,7 +601,9 @@ void PrintInteger(int __Value__, int __Base__, int __Uppercase__)
         for (int Iteration = 0; Buffer[Iteration]; Iteration++)
         {
             if (Buffer[Iteration] >= 'a' && Buffer[Iteration] <= 'f')
+            {
                 Buffer[Iteration] = Buffer[Iteration] - 'a' + 'A';
+            }
         }
     }
 
@@ -520,7 +613,8 @@ void PrintInteger(int __Value__, int __Base__, int __Uppercase__)
 /**
  * @brief Print an unsigned integer in the given base.
  */
-void PrintUnsigned(uint32_t __Value__, int __Base__, int __Uppercase__)
+void
+PrintUnsigned(uint32_t __Value__, int __Base__, int __Uppercase__)
 {
     char Buffer[32];
     UnsignedToString(__Value__, Buffer, __Base__);
@@ -530,7 +624,9 @@ void PrintUnsigned(uint32_t __Value__, int __Base__, int __Uppercase__)
         for (int Iteration = 0; Buffer[Iteration]; Iteration++)
         {
             if (Buffer[Iteration] >= 'a' && Buffer[Iteration] <= 'f')
+            {
                 Buffer[Iteration] = Buffer[Iteration] - 'a' + 'A';
+            }
         }
     }
 
@@ -538,10 +634,11 @@ void PrintUnsigned(uint32_t __Value__, int __Base__, int __Uppercase__)
 }
 
 /**
- * @brief Print a string 
+ * @brief Print a string
  * (null-safe).
  */
-void PrintString(const char *__String__)
+void
+PrintString(const char* __String__)
 {
     if (__String__ == 0)
     {
@@ -554,7 +651,8 @@ void PrintString(const char *__String__)
 /**
  * @brief Print a single character.
  */
-void PrintChar(char __Char__)
+void
+PrintChar(char __Char__)
 {
     PutChar(__Char__);
 }
@@ -562,7 +660,8 @@ void PrintChar(char __Char__)
 /**
  * @brief Print a pointer value in hexadecimal.
  */
-void PrintPointer(void *__Pointer__)
+void
+PrintPointer(void* __Pointer__)
 {
     PutPrint("0x");
     PrintUnsigned((uint32_t)(uintptr_t)__Pointer__, 16, 0);
@@ -572,26 +671,31 @@ void PrintPointer(void *__Pointer__)
  * @brief Get the length of a string.
  * Libc strlen?
  */
-int StringLength(const char *__String__)
+int
+StringLength(const char* __String__)
 {
     int Length = 0;
-    while (__String__[Length]) Length++;
+    while (__String__[Length])
+    {
+        Length++;
+    }
     return Length;
 }
 
 /**
  * @brief Reverse a string in place.
  */
-void ReverseString(char *__String__, int __Length__)
+void
+ReverseString(char* __String__, int __Length__)
 {
     int Start = 0;
-    int End = __Length__ - 1;
+    int End   = __Length__ - 1;
 
     while (Start < End)
     {
-        char Temp = __String__[Start];
+        char Temp         = __String__[Start];
         __String__[Start] = __String__[End];
-        __String__[End] = Temp;
+        __String__[End]   = Temp;
         Start++;
         End--;
     }
@@ -600,32 +704,36 @@ void ReverseString(char *__String__, int __Length__)
 /**
  * @brief Convert integer to string in given base.
  */
-void IntegerToString(int __Value__, char *__Buffer__, int __Base__)
+void
+IntegerToString(int __Value__, char* __Buffer__, int __Base__)
 {
-    int Iteration = 0;
+    int Iteration  = 0;
     int IsNegative = 0;
 
     if (__Value__ == 0)
     {
         __Buffer__[Iteration++] = '0';
-        __Buffer__[Iteration] = '\0';
+        __Buffer__[Iteration]   = '\0';
         return;
     }
 
     if (__Value__ < 0 && __Base__ == 10)
     {
         IsNegative = 1;
-        __Value__ = -__Value__;
+        __Value__  = -__Value__;
     }
 
     while (__Value__ != 0)
     {
-        int Remainder = __Value__ % __Base__;
+        int Remainder           = __Value__ % __Base__;
         __Buffer__[Iteration++] = (Remainder > 9) ? (Remainder - 10) + 'a' : Remainder + '0';
-        __Value__ = __Value__ / __Base__;
+        __Value__               = __Value__ / __Base__;
     }
 
-    if (IsNegative) __Buffer__[Iteration++] = '-';
+    if (IsNegative)
+    {
+        __Buffer__[Iteration++] = '-';
+    }
 
     __Buffer__[Iteration] = '\0';
     ReverseString(__Buffer__, Iteration);
@@ -634,22 +742,23 @@ void IntegerToString(int __Value__, char *__Buffer__, int __Base__)
 /**
  * @brief Convert unsigned integer to string in given base.
  */
-void UnsignedToString(uint32_t __Value__, char *__Buffer__, int __Base__)
+void
+UnsignedToString(uint32_t __Value__, char* __Buffer__, int __Base__)
 {
     int Iteration = 0;
 
     if (__Value__ == 0)
     {
         __Buffer__[Iteration++] = '0';
-        __Buffer__[Iteration] = '\0';
+        __Buffer__[Iteration]   = '\0';
         return;
     }
 
     while (__Value__ != 0)
     {
-        int Remainder = __Value__ % __Base__;
+        int Remainder           = __Value__ % __Base__;
         __Buffer__[Iteration++] = (Remainder > 9) ? (Remainder - 10) + 'a' : Remainder + '0';
-        __Value__ = __Value__ / __Base__;
+        __Value__               = __Value__ / __Base__;
     }
 
     __Buffer__[Iteration] = '\0';

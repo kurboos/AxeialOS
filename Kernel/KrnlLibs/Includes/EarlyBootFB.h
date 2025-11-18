@@ -5,6 +5,4 @@
  * FrameBuffer for Early Boot Graphics and Debugging
  */
 
-extern volatile struct 
-limine_framebuffer_request 
-EarlyLimineFrambuffer;
+extern volatile struct limine_framebuffer_request EarlyLimineFrambuffer;

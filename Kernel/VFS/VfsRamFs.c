@@ -1,8 +1,8 @@
 #include <AllTypes.h>
-#include <String.h>
 #include <KHeap.h>
 #include <KrnPrintf.h>
 #include <RamFs.h>
+#include <String.h>
 
 /**
  * @brief Vnode operations table for RamFS
@@ -12,29 +12,29 @@
  * Many operations are not implemented (return -1) as RamFS is read-only.
  */
 const VnodeOps __RamVfsOps__ = {
-    .Open    = RamVfsOpen,      /**< Open file/directory handle */
-    .Close   = RamVfsClose,     /**< Close file handle and free resources */
-    .Read    = RamVfsRead,      /**< Read data from file */
-    .Write   = RamVfsWrite,     /**< Write to file (not implemented - read-only) */
-    .Lseek   = RamVfsLseek,     /**< Seek to position within file */
-    .Ioctl   = RamVfsIoctl,     /**< I/O control operations (not implemented) */
-    .Stat    = RamVfsStat,      /**< Get file/directory metadata */
-    .Readdir = RamVfsReaddir,   /**< Read directory entries */
-    .Lookup  = RamVfsLookup,    /**< Lookup child by name in directory */
-    .Create  = RamVfsCreate,    /**< Create new file in directory */
-    .Unlink  = RamVfsUnlink,    /**< Remove file (not implemented) */
-    .Mkdir   = RamVfsMkdir,     /**< Create new directory */
-    .Rmdir   = RamVfsRmdir,     /**< Remove directory (not implemented) */
-    .Symlink = RamVfsSymlink,   /**< Create symlink (not implemented) */
-    .Readlink= RamVfsReadlink,  /**< Read symlink target (not implemented) */
-    .Link    = RamVfsLink,      /**< Create hard link (not implemented) */
-    .Rename  = RamVfsRename,    /**< Rename/move file (not implemented) */
-    .Chmod   = RamVfsChmod,     /**< Change permissions (no-op) */
-    .Chown   = RamVfsChown,     /**< Change ownership (no-op) */
-    .Truncate= RamVfsTruncate,  /**< Truncate file (not implemented) */
-    .Sync    = RamVfsSync,      /**< Synchronize file (no-op) */
-    .Map     = RamVfsMap,       /**< Memory map file (not implemented) */
-    .Unmap   = RamVfsUnmap      /**< Unmap memory (not implemented) */
+    .Open     = RamVfsOpen,     /**< Open file/directory handle */
+    .Close    = RamVfsClose,    /**< Close file handle and free resources */
+    .Read     = RamVfsRead,     /**< Read data from file */
+    .Write    = RamVfsWrite,    /**< Write to file (not implemented - read-only) */
+    .Lseek    = RamVfsLseek,    /**< Seek to position within file */
+    .Ioctl    = RamVfsIoctl,    /**< I/O control operations (not implemented) */
+    .Stat     = RamVfsStat,     /**< Get file/directory metadata */
+    .Readdir  = RamVfsReaddir,  /**< Read directory entries */
+    .Lookup   = RamVfsLookup,   /**< Lookup child by name in directory */
+    .Create   = RamVfsCreate,   /**< Create new file in directory */
+    .Unlink   = RamVfsUnlink,   /**< Remove file (not implemented) */
+    .Mkdir    = RamVfsMkdir,    /**< Create new directory */
+    .Rmdir    = RamVfsRmdir,    /**< Remove directory (not implemented) */
+    .Symlink  = RamVfsSymlink,  /**< Create symlink (not implemented) */
+    .Readlink = RamVfsReadlink, /**< Read symlink target (not implemented) */
+    .Link     = RamVfsLink,     /**< Create hard link (not implemented) */
+    .Rename   = RamVfsRename,   /**< Rename/move file (not implemented) */
+    .Chmod    = RamVfsChmod,    /**< Change permissions (no-op) */
+    .Chown    = RamVfsChown,    /**< Change ownership (no-op) */
+    .Truncate = RamVfsTruncate, /**< Truncate file (not implemented) */
+    .Sync     = RamVfsSync,     /**< Synchronize file (no-op) */
+    .Map      = RamVfsMap,      /**< Memory map file (not implemented) */
+    .Unmap    = RamVfsUnmap     /**< Unmap memory (not implemented) */
 };
 
 /**
@@ -45,10 +45,10 @@ const VnodeOps __RamVfsOps__ = {
  * Most operations are no-ops since RamFS is memory-based and read-only.
  */
 const SuperOps __RamVfsSuperOps__ = {
-    .Sync   = RamVfsSuperSync,    /**< Sync filesystem to storage (no-op) */
-    .StatFs = RamVfsSuperStatFs,  /**< Get filesystem statistics */
-    .Release= RamVfsSuperRelease, /**< Release superblock resources */
-    .Umount = RamVfsSuperUmount   /**< Unmount filesystem (no-op) */
+    .Sync    = RamVfsSuperSync,    /**< Sync filesystem to storage (no-op) */
+    .StatFs  = RamVfsSuperStatFs,  /**< Get filesystem statistics */
+    .Release = RamVfsSuperRelease, /**< Release superblock resources */
+    .Umount  = RamVfsSuperUmount   /**< Unmount filesystem (no-op) */
 };
 
 /**
@@ -63,11 +63,7 @@ const SuperOps __RamVfsSuperOps__ = {
 int
 RamFsRegister(void)
 {
-    static FsType __RamFsType__ = {
-        .Name  = "ramfs",
-        .Mount = RamFsMountImpl,
-        .Priv  = 0
-    };
+    static FsType __RamFsType__ = {.Name = "ramfs", .Mount = RamFsMountImpl, .Priv = 0};
 
     if (VfsRegisterFs(&__RamFsType__) != 0)
     {
@@ -90,8 +86,8 @@ RamFsRegister(void)
  * @param __Opts__ Mount options (unused for RamFS, can be NULL)
  * @return Pointer to superblock on success, NULL on failure
  */
-Superblock *
-RamFsMountImpl(const char *__Dev__, const char *__Opts__)
+Superblock*
+RamFsMountImpl(const char* __Dev__, const char* __Opts__)
 {
     (void)__Dev__;
     (void)__Opts__;
@@ -102,14 +98,14 @@ RamFsMountImpl(const char *__Dev__, const char *__Opts__)
         return 0;
     }
 
-    Superblock *Sb = (Superblock*)KMalloc(sizeof(Superblock));
+    Superblock* Sb = (Superblock*)KMalloc(sizeof(Superblock));
     if (!Sb)
     {
         PError("RamFS: Sb alloc failed\n");
         return 0;
     }
 
-    Vnode *Root = (Vnode*)KMalloc(sizeof(Vnode));
+    Vnode* Root = (Vnode*)KMalloc(sizeof(Vnode));
     if (!Root)
     {
         PError("RamFS: Root vnode alloc failed\n");
@@ -117,7 +113,7 @@ RamFsMountImpl(const char *__Dev__, const char *__Opts__)
         return 0;
     }
 
-    RamVfsPrivNode *Priv = (RamVfsPrivNode*)KMalloc(sizeof(RamVfsPrivNode));
+    RamVfsPrivNode* Priv = (RamVfsPrivNode*)KMalloc(sizeof(RamVfsPrivNode));
     if (!Priv)
     {
         PError("RamFS: Priv alloc failed\n");
@@ -133,12 +129,12 @@ RamFsMountImpl(const char *__Dev__, const char *__Opts__)
     Root->Priv   = Priv;
     Root->Refcnt = 1;
 
-    Sb->Type   = 0;
-    Sb->Dev    = 0;
-    Sb->Flags  = 0;
-    Sb->Root   = Root;
-    Sb->Ops    = &__RamVfsSuperOps__;
-    Sb->Priv   = 0;
+    Sb->Type  = 0;
+    Sb->Dev   = 0;
+    Sb->Flags = 0;
+    Sb->Root  = Root;
+    Sb->Ops   = &__RamVfsSuperOps__;
+    Sb->Priv  = 0;
 
     PDebug("RamFS: Superblock created\n");
     return Sb;
@@ -156,7 +152,7 @@ RamFsMountImpl(const char *__Dev__, const char *__Opts__)
  * @return 0 on success, -1 on failure
  */
 int
-RamVfsOpen(Vnode *__Node__, File *__File__)
+RamVfsOpen(Vnode* __Node__, File* __File__)
 {
     if (!__Node__ || !__File__)
     {
@@ -164,7 +160,7 @@ RamVfsOpen(Vnode *__Node__, File *__File__)
         return -1;
     }
 
-    RamVfsPrivNode *PN = (RamVfsPrivNode*)__Node__->Priv;
+    RamVfsPrivNode* PN = (RamVfsPrivNode*)__Node__->Priv;
     if (!PN || !PN->Node)
     {
         PError("RamFS: Open missing priv\n");
@@ -182,7 +178,7 @@ RamVfsOpen(Vnode *__Node__, File *__File__)
 
     if (PN->Node->Type == RamFSNode_File)
     {
-        RamVfsPrivFile *PF = (RamVfsPrivFile*)KMalloc(sizeof(RamVfsPrivFile));
+        RamVfsPrivFile* PF = (RamVfsPrivFile*)KMalloc(sizeof(RamVfsPrivFile));
         if (!PF)
         {
             PError("RamFS: Open file priv alloc failed\n");
@@ -213,10 +209,12 @@ RamVfsOpen(Vnode *__Node__, File *__File__)
  * @return 0 on success, -1 on failure
  */
 int
-RamVfsClose(File *__File__)
+RamVfsClose(File* __File__)
 {
     if (!__File__)
+    {
         return -1;
+    }
 
     if (__File__->Priv)
     {
@@ -239,19 +237,23 @@ RamVfsClose(File *__File__)
  * @return Number of bytes read, or -1 on error
  */
 long
-RamVfsRead(File *__File__, void *__Buf__, long __Len__)
+RamVfsRead(File* __File__, void* __Buf__, long __Len__)
 {
     if (!__File__ || !__Buf__ || __Len__ <= 0)
+    {
         return -1;
+    }
 
-    RamVfsPrivFile *PF = (RamVfsPrivFile*)__File__->Priv;
+    RamVfsPrivFile* PF = (RamVfsPrivFile*)__File__->Priv;
     if (!PF || !PF->Node)
+    {
         return -1;
+    }
 
     size_t Got = RamFSRead(PF->Node, (size_t)PF->Offset, __Buf__, (size_t)__Len__);
     if (Got > 0)
     {
-        PF->Offset       += (long)Got;
+        PF->Offset += (long)Got;
         __File__->Offset += (long)Got;
         return (long)Got;
     }
@@ -271,7 +273,7 @@ RamVfsRead(File *__File__, void *__Buf__, long __Len__)
  * @return -1 (always fails, read-only filesystem)
  */
 long
-RamVfsWrite(File *__File__, const void *__Buf__, long __Len__)
+RamVfsWrite(File* __File__, const void* __Buf__, long __Len__)
 {
     (void)__File__;
     (void)__Buf__;
@@ -292,29 +294,54 @@ RamVfsWrite(File *__File__, const void *__Buf__, long __Len__)
  * @return New file offset, or -1 on error
  */
 long
-RamVfsLseek(File *__File__, long __Off__, int __Whence__)
+RamVfsLseek(File* __File__, long __Off__, int __Whence__)
 {
     if (!__File__)
+    {
         return -1;
+    }
 
-    RamVfsPrivFile *PF = (RamVfsPrivFile*)__File__->Priv;
-    long Size = 0;
+    RamVfsPrivFile* PF   = (RamVfsPrivFile*)__File__->Priv;
+    long            Size = 0;
 
     if (PF && PF->Node && PF->Node->Type == RamFSNode_File)
+    {
         Size = (long)PF->Node->Size;
+    }
 
     long Base = 0;
-    if (__Whence__ == VSeekSET) Base = 0;
-    else if (__Whence__ == VSeekCUR) Base = __File__->Offset;
-    else if (__Whence__ == VSeekEND) Base = Size;
-    else return -1;
+    if (__Whence__ == VSeekSET)
+    {
+        Base = 0;
+    }
+    else if (__Whence__ == VSeekCUR)
+    {
+        Base = __File__->Offset;
+    }
+    else if (__Whence__ == VSeekEND)
+    {
+        Base = Size;
+    }
+    else
+    {
+        return -1;
+    }
 
     long New = Base + __Off__;
-    if (New < 0) New = 0;
-    if (PF && PF->Node && New > (long)PF->Node->Size) New = (long)PF->Node->Size;
+    if (New < 0)
+    {
+        New = 0;
+    }
+    if (PF && PF->Node && New > (long)PF->Node->Size)
+    {
+        New = (long)PF->Node->Size;
+    }
 
     __File__->Offset = New;
-    if (PF) PF->Offset = New;
+    if (PF)
+    {
+        PF->Offset = New;
+    }
     return New;
 }
 
@@ -330,7 +357,7 @@ RamVfsLseek(File *__File__, long __Off__, int __Whence__)
  * @return -1 (always fails, not supported)
  */
 int
-RamVfsIoctl(File *__File__, unsigned long __Cmd__, void *__Arg__)
+RamVfsIoctl(File* __File__, unsigned long __Cmd__, void* __Arg__)
 {
     (void)__File__;
     (void)__Cmd__;
@@ -349,79 +376,94 @@ RamVfsIoctl(File *__File__, unsigned long __Cmd__, void *__Arg__)
  * @return 0 on success, -1 on failure
  */
 int
-RamVfsStat(Vnode *__Node__, VfsStat *__Out__)
+RamVfsStat(Vnode* __Node__, VfsStat* __Out__)
 {
     if (!__Node__ || !__Out__)
+    {
         return -1;
+    }
 
-    RamVfsPrivNode *PN = (RamVfsPrivNode*)__Node__->Priv;
+    RamVfsPrivNode* PN = (RamVfsPrivNode*)__Node__->Priv;
     if (!PN || !PN->Node)
+    {
         return -1;
+    }
 
-    __Out__->Ino     = (long)(uintptr_t)PN->Node;
-    __Out__->Size    = (PN->Node->Type == RamFSNode_File) ? (long)PN->Node->Size : 0;
-    __Out__->Blocks  = 0;
-    __Out__->BlkSize = 0;
-    __Out__->Nlink   = 1;
-    __Out__->Rdev    = 0;
-    __Out__->Dev     = 0;
-    __Out__->Flags   = 0;
-    __Out__->Type    = __Node__->Type;
-    __Out__->Perm.Mode = 0;
-    __Out__->Perm.Uid  = 0;
-    __Out__->Perm.Gid  = 0;
-    __Out__->Atime.Sec = 0; __Out__->Atime.Nsec = 0;
-    __Out__->Mtime.Sec = 0; __Out__->Mtime.Nsec = 0;
-    __Out__->Ctime.Sec = 0; __Out__->Ctime.Nsec = 0;
+    __Out__->Ino        = (long)(uintptr_t)PN->Node;
+    __Out__->Size       = (PN->Node->Type == RamFSNode_File) ? (long)PN->Node->Size : 0;
+    __Out__->Blocks     = 0;
+    __Out__->BlkSize    = 0;
+    __Out__->Nlink      = 1;
+    __Out__->Rdev       = 0;
+    __Out__->Dev        = 0;
+    __Out__->Flags      = 0;
+    __Out__->Type       = __Node__->Type;
+    __Out__->Perm.Mode  = 0;
+    __Out__->Perm.Uid   = 0;
+    __Out__->Perm.Gid   = 0;
+    __Out__->Atime.Sec  = 0;
+    __Out__->Atime.Nsec = 0;
+    __Out__->Mtime.Sec  = 0;
+    __Out__->Mtime.Nsec = 0;
+    __Out__->Ctime.Sec  = 0;
+    __Out__->Ctime.Nsec = 0;
     return 0;
 }
 
 /**
  * @brief Read directory entries from RamFS directory
  *
- * Reads directory entries from the specified directory vnode into a buffer.
- * Each entry contains the name, type, and inode number of a child item.
+ * Fills the provided buffer with VfsDirEnt structures for each child.
+ * Returns the number of entries written.
  *
  * @param __Dir__ Directory vnode to read from
  * @param __Buf__ Buffer to store directory entries
- * @param __BufLen__ Size of the buffer in bytes
- * @return Number of bytes written to buffer, or -1 on error
+ * @param __BufLen__ Capacity in number of entries
+ * @return Number of entries written, or -1 on error
  */
 long
-RamVfsReaddir(Vnode *__Dir__, void *__Buf__, long __BufLen__)
+RamVfsReaddir(Vnode* __Dir__, void* __Buf__, long __BufLen__)
 {
     if (!__Dir__ || !__Buf__ || __BufLen__ <= 0)
+    {
         return -1;
+    }
 
-    RamVfsPrivNode *PN = (RamVfsPrivNode*)__Dir__->Priv;
+    RamVfsPrivNode* PN = (RamVfsPrivNode*)__Dir__->Priv;
     if (!PN || !PN->Node)
+    {
         return -1;
+    }
 
     if (PN->Node->Type != RamFSNode_Directory)
+    {
         return -1;
+    }
 
-    long Max = __BufLen__ / (long)sizeof(VfsDirEnt);
-    if (Max <= 0) return -1;
+    long       Max = __BufLen__;
+    RamFSNode* Tmp[RamFSMaxChildren];
+    uint32_t   Cnt = RamFSListChildren(PN->Node, Tmp, RamFSMaxChildren);
 
-    RamFSNode *Tmp[RamFSMaxChildren];
-    uint32_t Cnt = RamFSListChildren(PN->Node, Tmp, RamFSMaxChildren);
-
-    long Wrote = 0;
-    VfsDirEnt *DE = (VfsDirEnt*)__Buf__;
+    long       Wrote = 0;
+    VfsDirEnt* DE    = (VfsDirEnt*)__Buf__;
 
     for (uint32_t I = 0; I < Cnt && Wrote < Max; I++)
     {
-        RamFSNode *C = Tmp[I];
-        long N = 0;
-        const char *Nm = C->Name;
-        while (Nm[N] && N < 255) { DE[Wrote].Name[N] = Nm[N]; N++; }
+        RamFSNode*  C  = Tmp[I];
+        long        N  = 0;
+        const char* Nm = C->Name;
+        while (Nm[N] && N < 255)
+        {
+            DE[Wrote].Name[N] = Nm[N];
+            N++;
+        }
         DE[Wrote].Name[N] = 0;
         DE[Wrote].Type    = (C->Type == RamFSNode_Directory) ? VNodeDIR : VNodeFILE;
         DE[Wrote].Ino     = (long)(uintptr_t)C;
         Wrote++;
     }
 
-    return Wrote * (long)sizeof(VfsDirEnt);
+    return Wrote; /* return count of entries */
 }
 
 /**
@@ -434,37 +476,63 @@ RamVfsReaddir(Vnode *__Dir__, void *__Buf__, long __BufLen__)
  * @param __Name__ Name of the child to look up
  * @return Vnode of the child if found, NULL otherwise
  */
-Vnode *
-RamVfsLookup(Vnode *__Dir__, const char *__Name__)
+Vnode*
+RamVfsLookup(Vnode* __Dir__, const char* __Name__)
 {
     if (!__Dir__ || !__Name__)
+    {
         return 0;
+    }
 
-    RamVfsPrivNode *PN = (RamVfsPrivNode*)__Dir__->Priv;
+    RamVfsPrivNode* PN = (RamVfsPrivNode*)__Dir__->Priv;
     if (!PN || !PN->Node)
+    {
         return 0;
+    }
 
     if (PN->Node->Type != RamFSNode_Directory)
+    {
         return 0;
+    }
 
-    char Path[512];
-    long L = 0;
-    const char *DN = PN->Node->Name ? PN->Node->Name : "/";
-    while (DN[L] && L < 511) { Path[L] = DN[L]; L++; }
-    if (L == 0 || Path[L-1] != '/') { Path[L++] = '/'; }
+    char        Path[512];
+    long        L  = 0;
+    const char* DN = PN->Node->Name ? PN->Node->Name : "/";
+    while (DN[L] && L < 511)
+    {
+        Path[L] = DN[L];
+        L++;
+    }
+    if (L == 0 || Path[L - 1] != '/')
+    {
+        Path[L++] = '/';
+    }
     long N = 0;
-    while (__Name__[N] && L + N < 511) { Path[L + N] = __Name__[N]; N++; }
+    while (__Name__[N] && L + N < 511)
+    {
+        Path[L + N] = __Name__[N];
+        N++;
+    }
     Path[L + N] = 0;
 
-    RamFSNode *Child = RamFSLookup(RamFS.Root, Path);
+    RamFSNode* Child = RamFSLookup(RamFS.Root, Path);
     if (!Child)
+    {
         return 0;
+    }
 
-    Vnode *V = (Vnode*)KMalloc(sizeof(Vnode));
-    if (!V) return 0;
+    Vnode* V = (Vnode*)KMalloc(sizeof(Vnode));
+    if (!V)
+    {
+        return 0;
+    }
 
-    RamVfsPrivNode *Priv = (RamVfsPrivNode*)KMalloc(sizeof(RamVfsPrivNode));
-    if (!Priv) { KFree(V); return 0; }
+    RamVfsPrivNode* Priv = (RamVfsPrivNode*)KMalloc(sizeof(RamVfsPrivNode));
+    if (!Priv)
+    {
+        KFree(V);
+        return 0;
+    }
 
     Priv->Node = Child;
     V->Type    = (Child->Type == RamFSNode_Directory) ? VNodeDIR : VNodeFILE;
@@ -489,19 +557,31 @@ RamVfsLookup(Vnode *__Dir__, const char *__Name__)
  * @return 0 on success, -1 on failure
  */
 int
-RamVfsCreate(Vnode *__Dir__, const char *__Name__, long __Flags__, VfsPerm __Perm__)
+RamVfsCreate(Vnode* __Dir__, const char* __Name__, long __Flags__, VfsPerm __Perm__)
 {
     (void)__Flags__;
     (void)__Perm__;
-    if (!__Dir__ || !__Name__) return -1;
-    RamVfsPrivNode *PN = (RamVfsPrivNode*)__Dir__->Priv;
-    if (!PN || !PN->Node) return -1;
-    if (PN->Node->Type != RamFSNode_Directory) return -1;
+    if (!__Dir__ || !__Name__)
+    {
+        return -1;
+    }
+    RamVfsPrivNode* PN = (RamVfsPrivNode*)__Dir__->Priv;
+    if (!PN || !PN->Node)
+    {
+        return -1;
+    }
+    if (PN->Node->Type != RamFSNode_Directory)
+    {
+        return -1;
+    }
 
-    char *Path = RamFSJoinPath(PN->Node->Name ? PN->Node->Name : "/", __Name__);
-    if (!Path) return -1;
+    char* Path = RamFSJoinPath(PN->Node->Name ? PN->Node->Name : "/", __Name__);
+    if (!Path)
+    {
+        return -1;
+    }
 
-    RamFSNode *Leaf = RamFSAttachPath(RamFS.Root, Path, RamFSNode_File, 0, 0);
+    RamFSNode* Leaf = RamFSAttachPath(RamFS.Root, Path, RamFSNode_File, 0, 0);
     KFree(Path);
     return Leaf ? 0 : -1;
 }
@@ -517,7 +597,7 @@ RamVfsCreate(Vnode *__Dir__, const char *__Name__, long __Flags__, VfsPerm __Per
  * @return -1 (always fails, read-only filesystem)
  */
 int
-RamVfsUnlink(Vnode *__Dir__, const char *__Name__)
+RamVfsUnlink(Vnode* __Dir__, const char* __Name__)
 {
     (void)__Dir__;
     (void)__Name__;
@@ -536,20 +616,32 @@ RamVfsUnlink(Vnode *__Dir__, const char *__Name__)
  * @return 0 on success, -1 on failure
  */
 int
-RamVfsMkdir(Vnode *__Dir__, const char *__Name__, VfsPerm __Perm__)
+RamVfsMkdir(Vnode* __Dir__, const char* __Name__, VfsPerm __Perm__)
 {
     (void)__Perm__;
-    if (!__Dir__ || !__Name__) return -1;
-    RamVfsPrivNode *PN = (RamVfsPrivNode*)__Dir__->Priv;
-    if (!PN || !PN->Node) return -1;
-    if (PN->Node->Type != RamFSNode_Directory) return -1;
+    if (!__Dir__ || !__Name__)
+    {
+        return -1;
+    }
+    RamVfsPrivNode* PN = (RamVfsPrivNode*)__Dir__->Priv;
+    if (!PN || !PN->Node)
+    {
+        return -1;
+    }
+    if (PN->Node->Type != RamFSNode_Directory)
+    {
+        return -1;
+    }
 
-    char *Path = RamFSJoinPath(PN->Node->Name ? PN->Node->Name : "/", __Name__);
-    if (!Path) return -1;
+    char* Path = RamFSJoinPath(PN->Node->Name ? PN->Node->Name : "/", __Name__);
+    if (!Path)
+    {
+        return -1;
+    }
 
-    RamFSNode *Leaf = RamFSAttachPath(RamFS.Root, Path, RamFSNode_Directory, 0, 0);
+    RamFSNode* Leaf = RamFSAttachPath(RamFS.Root, Path, RamFSNode_Directory, 0, 0);
     KFree(Path);
-	
+
     return Leaf ? 0 : -1;
 }
 
@@ -564,7 +656,7 @@ RamVfsMkdir(Vnode *__Dir__, const char *__Name__, VfsPerm __Perm__)
  * @return -1 (always fails, read-only filesystem)
  */
 int
-RamVfsRmdir(Vnode *__Dir__, const char *__Name__)
+RamVfsRmdir(Vnode* __Dir__, const char* __Name__)
 {
     (void)__Dir__;
     (void)__Name__;
@@ -584,7 +676,7 @@ RamVfsRmdir(Vnode *__Dir__, const char *__Name__)
  * @return -1 (always fails, read-only filesystem)
  */
 int
-RamVfsSymlink(Vnode *__Dir__, const char *__Name__, const char *__Target__, VfsPerm __Perm__)
+RamVfsSymlink(Vnode* __Dir__, const char* __Name__, const char* __Target__, VfsPerm __Perm__)
 {
     (void)__Dir__;
     (void)__Name__;
@@ -604,7 +696,7 @@ RamVfsSymlink(Vnode *__Dir__, const char *__Name__, const char *__Target__, VfsP
  * @return -1 (always fails, not supported)
  */
 int
-RamVfsReadlink(Vnode *__Node__, VfsNameBuf *__Buf__)
+RamVfsReadlink(Vnode* __Node__, VfsNameBuf* __Buf__)
 {
     (void)__Node__;
     (void)__Buf__;
@@ -623,7 +715,7 @@ RamVfsReadlink(Vnode *__Node__, VfsNameBuf *__Buf__)
  * @return -1 (always fails, read-only filesystem)
  */
 int
-RamVfsLink(Vnode *__Dir__, Vnode *__Src__, const char *__Name__)
+RamVfsLink(Vnode* __Dir__, Vnode* __Src__, const char* __Name__)
 {
     (void)__Dir__;
     (void)__Src__;
@@ -645,7 +737,11 @@ RamVfsLink(Vnode *__Dir__, Vnode *__Src__, const char *__Name__)
  * @return -1 (always fails, read-only filesystem)
  */
 int
-RamVfsRename(Vnode *__OldDir__, const char *__OldName__, Vnode *__NewDir__, const char *__NewName__, long __Flags__)
+RamVfsRename(Vnode*      __OldDir__,
+             const char* __OldName__,
+             Vnode*      __NewDir__,
+             const char* __NewName__,
+             long        __Flags__)
 {
     (void)__OldDir__;
     (void)__OldName__;
@@ -666,7 +762,7 @@ RamVfsRename(Vnode *__OldDir__, const char *__OldName__, Vnode *__NewDir__, cons
  * @return 0 (always succeeds, no-op)
  */
 int
-RamVfsChmod(Vnode *__Node__, long __Mode__)
+RamVfsChmod(Vnode* __Node__, long __Mode__)
 {
     (void)__Node__;
     (void)__Mode__;
@@ -685,7 +781,7 @@ RamVfsChmod(Vnode *__Node__, long __Mode__)
  * @return 0 (always succeeds, no-op)
  */
 int
-RamVfsChown(Vnode *__Node__, long __Uid__, long __Gid__)
+RamVfsChown(Vnode* __Node__, long __Uid__, long __Gid__)
 {
     (void)__Node__;
     (void)__Uid__;
@@ -705,7 +801,7 @@ RamVfsChown(Vnode *__Node__, long __Uid__, long __Gid__)
  * @return -1 (always fails, read-only filesystem)
  */
 int
-RamVfsTruncate(Vnode *__Node__, long __Len__)
+RamVfsTruncate(Vnode* __Node__, long __Len__)
 {
     (void)__Node__;
     (void)__Len__;
@@ -722,7 +818,7 @@ RamVfsTruncate(Vnode *__Node__, long __Len__)
  * @return 0 (always succeeds, no-op)
  */
 int
-RamVfsSync(Vnode *__Node__)
+RamVfsSync(Vnode* __Node__)
 {
     (void)__Node__;
     return 0;
@@ -741,7 +837,7 @@ RamVfsSync(Vnode *__Node__)
  * @return -1 (always fails, not supported)
  */
 int
-RamVfsMap(Vnode *__Node__, void **__Out__, long __Off__, long __Len__)
+RamVfsMap(Vnode* __Node__, void** __Out__, long __Off__, long __Len__)
 {
     (void)__Node__;
     (void)__Out__;
@@ -762,7 +858,7 @@ RamVfsMap(Vnode *__Node__, void **__Out__, long __Off__, long __Len__)
  * @return -1 (always fails, not supported)
  */
 int
-RamVfsUnmap(Vnode *__Node__, void *__Addr__, long __Len__)
+RamVfsUnmap(Vnode* __Node__, void* __Addr__, long __Len__)
 {
     (void)__Node__;
     (void)__Addr__;
@@ -780,7 +876,7 @@ RamVfsUnmap(Vnode *__Node__, void *__Addr__, long __Len__)
  * @return 0 (always succeeds, no-op)
  */
 int
-RamVfsSuperSync(Superblock *__Sb__)
+RamVfsSuperSync(Superblock* __Sb__)
 {
     (void)__Sb__;
     return 0;
@@ -797,9 +893,12 @@ RamVfsSuperSync(Superblock *__Sb__)
  * @return 0 on success, -1 on failure
  */
 int
-RamVfsSuperStatFs(Superblock *__Sb__, VfsStatFs *__Out__)
+RamVfsSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__)
 {
-    if (!__Sb__ || !__Out__) return -1;
+    if (!__Sb__ || !__Out__)
+    {
+        return -1;
+    }
     __Out__->TypeId  = RamFSMagic;
     __Out__->Bsize   = 0;
     __Out__->Blocks  = 0;
@@ -821,13 +920,19 @@ RamVfsSuperStatFs(Superblock *__Sb__, VfsStatFs *__Out__)
  * @param __Sb__ Superblock to release
  */
 void
-RamVfsSuperRelease(Superblock *__Sb__)
+RamVfsSuperRelease(Superblock* __Sb__)
 {
-    if (!__Sb__) return;
+    if (!__Sb__)
+    {
+        return;
+    }
     if (__Sb__->Root)
     {
-        RamVfsPrivNode *PN = (RamVfsPrivNode*)__Sb__->Root->Priv;
-        if (PN) KFree(PN);
+        RamVfsPrivNode* PN = (RamVfsPrivNode*)__Sb__->Root->Priv;
+        if (PN)
+        {
+            KFree(PN);
+        }
         KFree(__Sb__->Root);
         __Sb__->Root = 0;
     }
@@ -844,7 +949,7 @@ RamVfsSuperRelease(Superblock *__Sb__)
  * @return 0 (always succeeds, no-op)
  */
 int
-RamVfsSuperUmount(Superblock *__Sb__)
+RamVfsSuperUmount(Superblock* __Sb__)
 {
     (void)__Sb__;
     return 0;
@@ -865,7 +970,7 @@ RamVfsSuperUmount(Superblock *__Sb__)
  * @note Mounts at "/" making RamFS the root filesystem
  */
 int
-BootMountRamFs(const void *__Initrd__, size_t __Len__)
+BootMountRamFs(const void* __Initrd__, size_t __Len__)
 {
     if (!__Initrd__ || __Len__ == 0)
     {

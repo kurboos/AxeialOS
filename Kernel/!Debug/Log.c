@@ -14,9 +14,12 @@
  * @return void
  */
 void
-PError(const char *__Format__, ...)
+PError(const char* __Format__, ...)
 {
-	if (!__Format__) __Format__ = "(null)";
+    if (!__Format__)
+    {
+        __Format__ = "(null)";
+    }
     AcquireSpinLock(&ConsoleLock);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
@@ -60,9 +63,12 @@ PError(const char *__Format__, ...)
  * @return void
  */
 void
-PWarn(const char *__Format__, ...)
+PWarn(const char* __Format__, ...)
 {
-	if (!__Format__) __Format__ = "(null)";
+    if (!__Format__)
+    {
+        __Format__ = "(null)";
+    }
     AcquireSpinLock(&ConsoleLock);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
@@ -106,9 +112,12 @@ PWarn(const char *__Format__, ...)
  * @return void
  */
 void
-PInfo(const char *__Format__, ...)
+PInfo(const char* __Format__, ...)
 {
-	if (!__Format__) __Format__ = "(null)";
+    if (!__Format__)
+    {
+        __Format__ = "(null)";
+    }
     AcquireSpinLock(&ConsoleLock);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
@@ -154,9 +163,12 @@ PInfo(const char *__Format__, ...)
  * @note This function is named `_PDebug` to avoid conflicts with macros.
  */
 void
-_PDebug(const char *__Format__, ...)
+_PDebug(const char* __Format__, ...)
 {
-	if (!__Format__) __Format__ = "(null)";
+    if (!__Format__)
+    {
+        __Format__ = "(null)";
+    }
     AcquireSpinLock(&ConsoleLock);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
@@ -199,9 +211,12 @@ _PDebug(const char *__Format__, ...)
  * @return void
  */
 void
-PSuccess(const char *__Format__, ...)
+PSuccess(const char* __Format__, ...)
 {
-	if (!__Format__) __Format__ = "(null)";
+    if (!__Format__)
+    {
+        __Format__ = "(null)";
+    }
     AcquireSpinLock(&ConsoleLock);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;

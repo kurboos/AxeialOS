@@ -1,5 +1,5 @@
-#include <Sync.h>   /* Synchronization primitives definitions */
-#include <SMP.h>    /* Symmetric multiprocessing functions */
+#include <SMP.h>  /* Symmetric multiprocessing functions */
+#include <Sync.h> /* Synchronization primitives definitions */
 
 /**
  * @brief Initialize a mutex.
@@ -15,10 +15,10 @@
 void
 InitializeMutex(Mutex* __Mutex__, const char* __Name__)
 {
-    __Mutex__->Lock = 0;                    /* Initially unlocked */
-    __Mutex__->Owner = 0xFFFFFFFF;          /* No owner (kernel value) */
-    __Mutex__->RecursionCount = 0;         /* No recursive locks */
-    __Mutex__->Name = __Name__;             /* Assign name for debugging */
+    __Mutex__->Lock           = 0;          /* Initially unlocked */
+    __Mutex__->Owner          = 0xFFFFFFFF; /* No owner (kernel value) */
+    __Mutex__->RecursionCount = 0;          /* No recursive locks */
+    __Mutex__->Name           = __Name__;   /* Assign name for debugging */
 }
 
 /**
@@ -36,22 +36,20 @@ AcquireMutex(Mutex* __Mutex__)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
-    
     if (__Mutex__->Owner == CpuId)
     {
         __Mutex__->RecursionCount++;
         return;
     }
 
-    
     while (1)
     {
-        uint32_t Expected = 0;  /* Expect the lock to be free (0) */
-        if (__atomic_compare_exchange_n(&__Mutex__->Lock, &Expected, 1,
-            false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+        uint32_t Expected = 0; /* Expect the lock to be free (0) */
+        if (__atomic_compare_exchange_n(
+                &__Mutex__->Lock, &Expected, 1, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
         {
             /* Successfully acquired the lock */
-            __Mutex__->Owner = CpuId;
+            __Mutex__->Owner          = CpuId;
             __Mutex__->RecursionCount = 1;
             break;
         }
@@ -76,18 +74,17 @@ ReleaseMutex(Mutex* __Mutex__)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
-    
     if (__Mutex__->Owner != CpuId)
+    {
         return;
+    }
 
-    
     __Mutex__->RecursionCount--;
 
-    
     if (__Mutex__->RecursionCount == 0)
     {
-        __Mutex__->Owner = 0xFFFFFFFF;  /* Reset owner to kernel/none */
-        __atomic_store_n(&__Mutex__->Lock, 0, __ATOMIC_RELEASE);  /* Unlock atomically */
+        __Mutex__->Owner = 0xFFFFFFFF;                           /* Reset owner to kernel/none */
+        __atomic_store_n(&__Mutex__->Lock, 0, __ATOMIC_RELEASE); /* Unlock atomically */
     }
 }
 
@@ -106,20 +103,18 @@ TryAcquireMutex(Mutex* __Mutex__)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
-    
     if (__Mutex__->Owner == CpuId)
     {
         __Mutex__->RecursionCount++;
         return true;
     }
 
-    
     uint32_t Expected = 0;
-    if (__atomic_compare_exchange_n(&__Mutex__->Lock, &Expected, 1,
-        false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+    if (__atomic_compare_exchange_n(
+            &__Mutex__->Lock, &Expected, 1, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
     {
         /* Successfully acquired */
-        __Mutex__->Owner = CpuId;
+        __Mutex__->Owner          = CpuId;
         __Mutex__->RecursionCount = 1;
         return true;
     }

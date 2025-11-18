@@ -25,20 +25,17 @@ BootConsole Console = {0};
  * @note Must be called before any console output functions.
  */
 void
-KickStartConsole(
-uint32_t *__FrameBuffer__,
-uint32_t __CW__,
-uint32_t __CH__)
+KickStartConsole(uint32_t* __FrameBuffer__, uint32_t __CW__, uint32_t __CH__)
 {
-    Console.FrameBuffer = __FrameBuffer__;
+    Console.FrameBuffer  = __FrameBuffer__;
     Console.FrameBufferW = __CW__;
     Console.FrameBufferH = __CH__;
-    Console.ConsoleCol = __CW__ / FontW;
-    Console.ConsoleRow = __CH__ / FontH;
-    Console.CursorX = 0;
-    Console.CursorY = 0;
-    Console.TXColor = 0xFFFFFF;  /* White text */
-    Console.BGColor = 0x000000;  /* Black background */
+    Console.ConsoleCol   = __CW__ / FontW;
+    Console.ConsoleRow   = __CH__ / FontH;
+    Console.CursorX      = 0;
+    Console.CursorY      = 0;
+    Console.TXColor      = 0xFFFFFF; /* White text */
+    Console.BGColor      = 0x000000; /* Black background */
 }
 
 /**
@@ -53,9 +50,9 @@ void
 ClearConsole(void)
 {
     /* Fill entire framebuffer with background color */
-    for (uint32_t i = 0; i < Console.FrameBufferW * Console.FrameBufferH; i++)
+    for (uint32_t I = 0; I < Console.FrameBufferW * Console.FrameBufferH; I++)
     {
-        Console.FrameBuffer[i] = Console.BGColor;
+        Console.FrameBuffer[I] = Console.BGColor;
     }
 
     /* Reset cursor to top-left position */
@@ -80,9 +77,9 @@ ScrollConsole(void)
         for (uint32_t PosX = 0; PosX < Console.ConsoleCol; PosX++)
         {
             /* Calculate source and destination Y positions in pixels */
-            uint32_t srcY = (PosY + 1) * FontH;  /* Line below */
-            uint32_t dstY = PosY * FontH;        /* Current line */
-            uint32_t pixelX = PosX * FontW;      /* Character column start */
+            uint32_t srcY   = (PosY + 1) * FontH; /* Line below */
+            uint32_t dstY   = PosY * FontH;       /* Current line */
+            uint32_t pixelX = PosX * FontW;       /* Character column start */
 
             /* Copy each pixel of the character (FontW x FontH block) */
             for (uint32_t py = 0; py < FontH; py++)
@@ -127,21 +124,22 @@ PutChar(char __Char__)
     /* Always mirror output to serial port for debugging */
     SerialPutChar(__Char__);
 
-    if (__Char__ == '\n')  /* Newline: move to next line */
+    if (__Char__ == '\n') /* Newline: move to next line */
     {
         Console.CursorX = 0;
         Console.CursorY++;
     }
-    else if (__Char__ == '\r')  /* Carriage return: move to line start */
+    else if (__Char__ == '\r') /* Carriage return: move to line start */
     {
         Console.CursorX = 0;
     }
-    else  /* Printable character: render and advance cursor */
+    else /* Printable character: render and advance cursor */
     {
         uint32_t PixelX = Console.CursorX * FontW;
         uint32_t PixelY = Console.CursorY * FontH;
 
-        DisplayChar(Console.FrameBuffer, Console.FrameBufferW, PixelX, PixelY, __Char__, Console.TXColor);
+        DisplayChar(
+            Console.FrameBuffer, Console.FrameBufferW, PixelX, PixelY, __Char__, Console.TXColor);
         Console.CursorX++;
     }
 
@@ -170,7 +168,7 @@ PutChar(char __Char__)
  * @return void
  */
 void
-PutPrint(const char *__String__)
+PutPrint(const char* __String__)
 {
     /* Process each character until null terminator */
     while (*__String__)
@@ -214,7 +212,11 @@ SetCursor(uint32_t __CurX__, uint32_t __CurY__)
 {
     /* Bounds checking to prevent cursor from going out of bounds */
     if (__CurX__ < Console.ConsoleCol)
+    {
         Console.CursorX = __CurX__;
+    }
     if (__CurY__ < Console.ConsoleRow)
+    {
         Console.CursorY = __CurY__;
+    }
 }

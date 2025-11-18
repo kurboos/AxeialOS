@@ -1,8 +1,8 @@
-#include <Sync.h>   /* Synchronization primitives definitions */
-#include <SMP.h>    /* Symmetric multiprocessing functions */
+#include <SMP.h>  /* Symmetric multiprocessing functions */
+#include <Sync.h> /* Synchronization primitives definitions */
 
 /** @brief Some Globals and Statics */
-SpinLock ConsoleLock;
+SpinLock        ConsoleLock;
 static uint64_t SavedFlags[MaxCPUs];
 
 /**
@@ -19,9 +19,9 @@ static uint64_t SavedFlags[MaxCPUs];
 void
 InitializeSpinLock(SpinLock* __Lock__, const char* __Name__)
 {
-    __Lock__->Lock = 0;                    /* Initially unlocked */
-    __Lock__->CpuId = 0xFFFFFFFF;          /* No owner (kernel value) */
-    __Lock__->Name = __Name__;             /* Assign name for debugging */
+    __Lock__->Lock  = 0;          /* Initially unlocked */
+    __Lock__->CpuId = 0xFFFFFFFF; /* No owner (kernel value) */
+    __Lock__->Name  = __Name__;   /* Assign name for debugging */
 }
 
 /**
@@ -35,21 +35,23 @@ InitializeSpinLock(SpinLock* __Lock__, const char* __Name__)
  *
  * @return void
  */
-void AcquireSpinLock(SpinLock* __Lock__)
+void
+AcquireSpinLock(SpinLock* __Lock__)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
-    
     uint64_t Flags;
-    __asm__ volatile("pushfq; popq %0; cli" : "=r"(Flags) :: "memory");
+    __asm__ volatile("pushfq; popq %0; cli" : "=r"(Flags)::"memory");
 
-    while (1) {
-        uint32_t Expected = 0;  /* Expect the lock to be free (0) */
-        if (__atomic_compare_exchange_n(&__Lock__->Lock, &Expected, 1,
-            false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED)) {
+    while (1)
+    {
+        uint32_t Expected = 0; /* Expect the lock to be free (0) */
+        if (__atomic_compare_exchange_n(
+                &__Lock__->Lock, &Expected, 1, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+        {
             /* Successfully acquired the lock */
-            __Lock__->CpuId = CpuId;
-            SavedFlags[CpuId] = Flags;  /* Save flags for this CPU */
+            __Lock__->CpuId   = CpuId;
+            SavedFlags[CpuId] = Flags; /* Save flags for this CPU */
             break;
         }
         /* Lock is held by another CPU, spin with pause for efficiency */
@@ -66,19 +68,17 @@ void AcquireSpinLock(SpinLock* __Lock__)
  *
  * @return void
  */
-void ReleaseSpinLock(SpinLock* __Lock__)
+void
+ReleaseSpinLock(SpinLock* __Lock__)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
-    
     uint64_t Flags = SavedFlags[CpuId];
 
-    
-    __Lock__->CpuId = 0xFFFFFFFF;  /* Reset owner to none */
-    __atomic_store_n(&__Lock__->Lock, 0, __ATOMIC_RELEASE);  /* Unlock */
+    __Lock__->CpuId = 0xFFFFFFFF;                           /* Reset owner to none */
+    __atomic_store_n(&__Lock__->Lock, 0, __ATOMIC_RELEASE); /* Unlock */
 
-    
-    __asm__ volatile("pushq %0; popfq" :: "r"(Flags) : "memory");
+    __asm__ volatile("pushq %0; popfq" ::"r"(Flags) : "memory");
 }
 
 /**
@@ -94,8 +94,8 @@ bool
 TryAcquireSpinLock(SpinLock* __Lock__)
 {
     uint32_t Expected = 0;
-    if (__atomic_compare_exchange_n(&__Lock__->Lock, &Expected, 1,
-        false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
+    if (__atomic_compare_exchange_n(
+            &__Lock__->Lock, &Expected, 1, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
     {
         /* Successfully acquired */
         __Lock__->CpuId = GetCurrentCpuId();

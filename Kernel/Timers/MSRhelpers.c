@@ -1,4 +1,4 @@
-#include <Timer.h>  /* Timer-related definitions and constants */
+#include <Timer.h> /* Timer-related definitions and constants */
 
 /**
  * @brief Read a Model-Specific Register (MSR).
@@ -18,10 +18,8 @@ ReadMsr(uint32_t __Msr__)
 {
     uint32_t Low, High;
 
-    
     __asm__ volatile("rdmsr" : "=a"(Low), "=d"(High) : "c"(__Msr__));
 
-    
     return ((uint64_t)High << 32) | Low;
 }
 
@@ -42,10 +40,9 @@ ReadMsr(uint32_t __Msr__)
 void
 WriteMsr(uint32_t __Msr__, uint64_t __Value__)
 {
-    
-    uint32_t Low = (uint32_t)__Value__;
+
+    uint32_t Low  = (uint32_t)__Value__;
     uint32_t High = (uint32_t)(__Value__ >> 32);
 
-    
     __asm__ volatile("wrmsr" : : "a"(Low), "d"(High), "c"(__Msr__));
 }

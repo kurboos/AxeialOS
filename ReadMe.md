@@ -1,1 +1,49 @@
-A simple AMD64 Semi-POSIX and Modern Operating System.
+A simple AMD64 Modern POSIX Operating System.
+My plan is to use as my primary one (or secondary on my laptop).
+
+it's not that complete neither that good but i am trying my best,
+but hey it's good for me.
+
+so let's install it.
+
+Steps to install this thing: (please use a linux distro because of tools)
+
+Step1: Clone this repository
+```
+git clone https://github.com/VOXIDEVOSTRO/AxeialOS.git
+```
+
+Step2: Go into the repository
+```
+cd AxeialOS
+```
+
+Step3: Init the submodules
+```
+git submodule update --init --recursive
+```
+
+Step4: Make the bootable image (.img) (Note: Make sure you have GCC)
+```
+./Build.sh
+```
+
+Step5: Hopefully if no errors making it, run it (Note: You must have QEMU, or specifically the x86_64 one, also you must have OVMF for the UEFI Firmware on QEMU)
+```
+./Run.sh
+```
+
+Yay you have installed AxeialOS (or just tested it).
+Once it boots, you should just see some testing and logging code of the EarlyBootConsole (as it doesn't have any kind of shell or terminal yet).
+
+Extras:
+
+1: If you want to see more output (Debugging Output) on the console, just head to 'Kernel/KrnlLibs/Includes/KrnPrintf.h' and uncomment this statement
+```c 
+// #define DEBUG /*UNCOMMENT THIS*/
+```
+and rebuild.
+
+2: If you want to do more with it and want to test on some spare and real machine, just burn the '.img' given from the build onto a USB Thumbdrive or some other USB mass storage device, and boot it from your UEFI Firmware.
+
+anyway thanks for actually trying it out.

@@ -1,11 +1,12 @@
+#include <Errnos.h>
 #include <KHeap.h>
 
 KernelHeapManager KHeap;
 
 void
-InitializeKHeap(void)
+InitializeKHeap(SysErr* __Err__ _unused)
 {
-    /*Set up standard slab cache sizes - powers of 2 for efficiency*/
+    /*?^2*/
     KHeap.SlabSizes[0] = 16;
     KHeap.SlabSizes[1] = 32;
     KHeap.SlabSizes[2] = 64;
@@ -16,16 +17,14 @@ InitializeKHeap(void)
     KHeap.SlabSizes[7] = 2048;
     KHeap.CacheCount   = MaxSlabSizes;
 
-    /*Initialize each slab cache with its object size and capacity*/
     for (uint32_t Index = 0; Index < MaxSlabSizes; Index++)
     {
-        SlabCache* Cache  = &KHeap.Caches[Index];
-        Cache->Slabs      = 0; /*No slabs allocated initially*/
-        Cache->ObjectSize = KHeap.SlabSizes[Index];
-        /*Calculate how many objects fit in a page minus slab header*/
+        SlabCache* Cache      = &KHeap.Caches[Index];
+        Cache->Slabs          = 0; /*No slabs allocated initially*/
+        Cache->ObjectSize     = KHeap.SlabSizes[Index];
         Cache->ObjectsPerSlab = (PageSize - sizeof(Slab)) / Cache->ObjectSize;
 
-        /*Ensure at least one object per slab, even for large objects*/
+        /* One object per slab */
         if (Cache->ObjectsPerSlab == 0)
         {
             Cache->ObjectsPerSlab = 1;
@@ -38,13 +37,12 @@ InitializeKHeap(void)
 void*
 KMalloc(size_t __Size__)
 {
-    /*Reject zero-sized allocations*/
     if (__Size__ == 0)
     {
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
 
-    /*Large allocations bypass slab system and go directly to PMM*/
+    /*Large allocations bypass slab and go directly to PMM*/
     if (__Size__ > 2048)
     {
         /*Calculate pages needed, rounding up*/
@@ -52,19 +50,20 @@ KMalloc(size_t __Size__)
         uint64_t PhysAddr = AllocPages(Pages);
         if (!PhysAddr)
         {
-            return 0; /*Out of memory*/
+            return Error_TO_Pointer(-TooMany); /*Out of memory*/
         }
         return PhysToVirt(PhysAddr);
     }
 
-    /*Find the appropriate slab cache for this size*/
     SlabCache* Cache = GetSlabCache(__Size__);
     if (!Cache)
     {
-        return 0; /*No suitable cache found*/
+        return Error_TO_Pointer(-NoSuch); /*No suitable cache found*/
     }
 
-    /*Search for a slab with available objects*/
+    SysErr  err;
+    SysErr* Error = &err;
+
     Slab* CurrentSlab = Cache->Slabs;
     while (CurrentSlab)
     {
@@ -75,31 +74,28 @@ KMalloc(size_t __Size__)
         CurrentSlab = CurrentSlab->Next;
     }
 
-    /*If no slab has free objects, allocate a new one*/
+    /*Alloc one if none*/
     if (!CurrentSlab)
     {
         CurrentSlab = AllocateSlab(Cache->ObjectSize);
         if (!CurrentSlab)
         {
-            return 0; /*Failed to allocate new slab*/
+            return Error_TO_Pointer(-BadAlloc); /*Failed to allocate new slab*/
         }
 
-        /*Add new slab to the front of the cache's slab list*/
         CurrentSlab->Next = Cache->Slabs;
         Cache->Slabs      = CurrentSlab;
     }
 
-    /*Remove object from free list*/
     SlabObject* Object = CurrentSlab->FreeList;
     if (!Object)
     {
-        return 0; /*Should not happen if FreeCount > 0*/
+        return Error_TO_Pointer(-NotCanonical); /*Should not happen if FreeCount > 0*/
     }
 
     CurrentSlab->FreeList = Object->Next;
     CurrentSlab->FreeCount--;
 
-    /*Zero out the allocated object for security*/
     uint8_t* ObjectBytes = (uint8_t*)Object;
     for (uint32_t Index = 0; Index < Cache->ObjectSize; Index++)
     {
@@ -110,32 +106,31 @@ KMalloc(size_t __Size__)
 }
 
 void
-KFree(void* __Ptr__)
+KFree(void* __Ptr__, SysErr* __Err__)
 {
-    /*Ignore null pointers*/
     if (!__Ptr__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
-    /*Calculate the slab address by masking off the page offset*/
+    /*Mask off the page offset*/
     uint64_t ObjectAddr = (uint64_t)__Ptr__;
     uint64_t SlabAddr   = ObjectAddr & ~(PageSize - 1);
     Slab*    TargetSlab = (Slab*)SlabAddr;
 
-    /*Check if this is a valid slab allocation*/
     if (TargetSlab->Magic != SlabMagic)
     {
-        /*Not a slab allocation - must be a large page allocation*/
+        /*Large?*/
         uint64_t PhysAddr = VirtToPhys(__Ptr__);
-        FreePage(PhysAddr);
+        FreePage(PhysAddr, __Err__);
+        SlotError(__Err__, -NotCanonical);
         return;
     }
 
-    /*Return object to slab's free list*/
     SlabObject* Object   = (SlabObject*)__Ptr__;
     Object->Next         = TargetSlab->FreeList;
-    Object->Magic        = FreeObjectMagic; /*Mark as free for debugging*/
+    Object->Magic        = FreeObjectMagic;
     TargetSlab->FreeList = Object;
     TargetSlab->FreeCount++;
 }

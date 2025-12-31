@@ -1,11 +1,12 @@
-#include <SMP.h>  /* Symmetric multiprocessing functions */
-#include <Sync.h> /* Synchronization primitives definitions */
+#include <Errnos.h>
+#include <SMP.h>
+#include <Sync.h>
 
 SpinLock        ConsoleLock;
 static uint64_t SavedFlags[MaxCPUs];
 
 void
-InitializeSpinLock(SpinLock* __Lock__, const char* __Name__)
+InitializeSpinLock(SpinLock* __Lock__, const char* __Name__, SysErr* __Err__ _unused)
 {
     __Lock__->Lock  = 0;          /* Initially unlocked */
     __Lock__->CpuId = 0xFFFFFFFF; /* No owner (kernel value) */
@@ -13,7 +14,7 @@ InitializeSpinLock(SpinLock* __Lock__, const char* __Name__)
 }
 
 void
-AcquireSpinLock(SpinLock* __Lock__)
+AcquireSpinLock(SpinLock* __Lock__, SysErr* __Err__ _unused)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
@@ -37,7 +38,7 @@ AcquireSpinLock(SpinLock* __Lock__)
 }
 
 void
-ReleaseSpinLock(SpinLock* __Lock__)
+ReleaseSpinLock(SpinLock* __Lock__, SysErr* __Err__ _unused)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
@@ -56,11 +57,9 @@ TryAcquireSpinLock(SpinLock* __Lock__)
     if (__atomic_compare_exchange_n(
             &__Lock__->Lock, &Expected, 1, false, __ATOMIC_ACQUIRE, __ATOMIC_RELAXED))
     {
-        /* Successfully acquired */
         __Lock__->CpuId = GetCurrentCpuId();
         return true;
     }
 
-    /* Failed to acquire */
     return false;
 }

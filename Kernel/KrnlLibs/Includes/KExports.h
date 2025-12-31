@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 
 typedef struct KExport
 {
@@ -17,4 +18,4 @@ extern const KExport __start_kexports[];
 extern const KExport __stop_kexports[];
 
 void* KexpLookup(const char* __Name__);
-void  KexpDump(void);
+void  KexpDump(SysErr* __Err__ _unused);

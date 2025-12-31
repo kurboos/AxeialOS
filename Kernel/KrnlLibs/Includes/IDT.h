@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <GDT.h>
 #include <KrnPrintf.h>
 
@@ -73,16 +74,17 @@ extern const char* ExceptionNames[32];
 #define IdtTypeInterruptGate 0x8E
 #define IdtTypeTrapGate      0x8F
 
-void SetIdtEntry(int __Index__, uint64_t __Handler__, uint16_t __Selector__, uint8_t __Flags__);
-void InitializePic(void);
-void InitializeIdt(void);
+void SetIdtEntry(
+    int __Index__, uint64_t __Handler__, uint16_t __Selector__, uint8_t __Flags__, SysErr* __Err__);
+void InitializePic(SysErr* __Err__);
+void InitializeIdt(SysErr* __Err__);
 void IsrHandler(InterruptFrame* __Frame__);
 void IrqHandler(InterruptFrame* __Frame__);
 
 /*Helper*/
-void DumpControlRegisters(void);
-void DumpInstruction(uint64_t __Rip__);
-void DumpMemory(uint64_t __Address__, int __Bytes__);
+void DumpControlRegisters(SysErr* __Err__);
+void DumpInstruction(uint64_t __Rip__, SysErr* __Err__);
+void DumpMemory(uint64_t __Address__, int __Bytes__, SysErr* __Err__);
 
 extern void Isr0(void);
 extern void Isr1(void);

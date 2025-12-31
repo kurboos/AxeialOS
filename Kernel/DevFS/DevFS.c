@@ -1,5 +1,6 @@
 
 #include <DevFS.h>
+#include <Errnos.h>
 
 /* Registry limits */
 static const long __MaxDevices__ = 256;
@@ -26,7 +27,7 @@ static int    DevVfsMkdir(Vnode* __Dir__, const char* __Name__, VfsPerm __Perm__
 static int    DevVfsSync(Vnode* __Node__);
 static int    DevVfsSuperSync(Superblock* __Sb__);
 static int    DevVfsSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__);
-static void   DevVfsSuperRelease(Superblock* __Sb__);
+static void   DevVfsSuperRelease(Superblock* __Sb__, SysErr* __Err__);
 static int    DevVfsSuperUmount(Superblock* __Sb__);
 
 /* Ops tables */
@@ -78,7 +79,7 @@ __dev_index__(const char* __Name__)
 {
     if (!__Name__)
     {
-        return -1;
+        return -BadArgs;
     }
     for (long I = 0; I < __DevCount__; I++)
     {
@@ -87,14 +88,14 @@ __dev_index__(const char* __Name__)
             return I;
         }
     }
-    return -1;
+    return -NoSuch;
 }
 
 static DeviceEntry*
 __dev_find__(const char* __Name__)
 {
     long idx = __dev_index__(__Name__);
-    return (idx >= 0) ? __DevTable__[idx] : 0;
+    return (idx >= 0) ? __DevTable__[idx] : Nothing;
 }
 
 int
@@ -102,8 +103,8 @@ DevFsInit(void)
 {
     __DevCount__ = 0;
     __DevSuper__ = 0;
-    PDebug("DevFS: Init registry\n");
-    return 0;
+    PDebug("Init for DevFs registry\n");
+    return SysOkay;
 }
 
 int
@@ -115,33 +116,36 @@ DevFsRegisterCharDevice(const char* __Name__,
 {
     if (!__Name__)
     {
-        return -1;
+        return -NotCanonical;
     }
 
     if (__DevCount__ >= __MaxDevices__)
     {
-        return -1;
+        return -TooMany;
     }
 
     if (__dev_find__(__Name__))
     {
-        return -1;
+        return -NoSuch;
     }
 
     DeviceEntry* E = (DeviceEntry*)KMalloc(sizeof(DeviceEntry));
     if (!E)
     {
-        return -1;
+        return -BadAlloc;
     }
 
     memset(E, 0, sizeof(*E));
+
+    SysErr  err;
+    SysErr* Error = &err;
 
     const long CapName   = 255; /*uint8 Max*/
     char*      NameStore = (char*)KMalloc(CapName + 1);
     if (!NameStore)
     {
-        KFree(E);
-        return -1;
+        KFree(E, Error);
+        return -BadAlloc;
     }
     strncpy(NameStore, __Name__, CapName);
     NameStore[CapName] = '\0';
@@ -151,12 +155,12 @@ DevFsRegisterCharDevice(const char* __Name__,
     E->Major   = __Major__;
     E->Minor   = __Minor__;
     E->Context = __Context__;
-    __builtin_memcpy(&E->Ops.C, &__Ops__, sizeof(CharDevOps));
+    memcpy(&E->Ops.C, &__Ops__, sizeof(CharDevOps));
 
     __DevTable__[__DevCount__] = E;
     __DevCount__++;
 
-    return 0;
+    return SysOkay;
 }
 
 int
@@ -168,23 +172,23 @@ DevFsRegisterBlockDevice(const char* __Name__,
 {
     if (!__Name__)
     {
-        return -1;
+        return -NotCanonical;
     }
     if (__DevCount__ >= __MaxDevices__)
     {
-        return -1;
+        return -TooMany;
     }
 
     if (__dev_find__(__Name__))
     {
-        PWarn("DevFS: Device exists %s\n", __Name__);
-        return -1;
+        PWarn("Device exists %s\n", __Name__);
+        return -NoSuch;
     }
 
     DeviceEntry* E = (DeviceEntry*)KMalloc(sizeof(DeviceEntry));
     if (!E)
     {
-        return -1;
+        return -BadAlloc;
     }
 
     E->Name    = __Name__;
@@ -195,8 +199,8 @@ DevFsRegisterBlockDevice(const char* __Name__,
     E->Ops.B   = __Ops__;
 
     __DevTable__[__DevCount__++] = E;
-    PDebug("DevFS: Block registered %s (blk=%ld)\n", __Name__, (long)__Ops__.BlockSize);
-    return 0;
+    PDebug("Block registered %s (blk=%ld)\n", __Name__, (long)__Ops__.BlockSize);
+    return SysOkay;
 }
 
 int
@@ -205,16 +209,18 @@ DevFsUnregisterDevice(const char* __Name__)
     long idx = __dev_index__(__Name__);
     if (idx < 0)
     {
-        return -1;
+        return -NotCanonical;
     }
-    KFree(__DevTable__[idx]);
+    SysErr  err;
+    SysErr* Error = &err;
+    KFree(__DevTable__[idx], Error);
     for (long J = idx; J < __DevCount__ - 1; J++)
     {
         __DevTable__[J] = __DevTable__[J + 1];
     }
     __DevTable__[--__DevCount__] = 0;
-    PDebug("DevFS: Unregistered %s\n", __Name__);
-    return 0;
+    PDebug("Unregistered %s\n", __Name__);
+    return SysOkay;
 }
 
 int
@@ -222,46 +228,41 @@ DevFsRegister(void)
 {
     static FsType __DevFsType__ = {.Name = "devfs", .Mount = DevFsMountImpl, .Priv = 0};
 
-    if (VfsRegisterFs(&__DevFsType__) != 0)
+    if (VfsRegisterFs(&__DevFsType__) != SysOkay)
     {
-        PError("DevFS: VfsRegisterFs failed\n");
-        return -1;
+        return -NotInit;
     }
 
-    PSuccess("DevFS: Registered with VFS\n");
-    return 0;
+    return SysOkay;
 }
 
 Superblock*
 DevFsMountImpl(const char* __Dev__ __attribute__((unused)),
                const char* __Opts__ __attribute__((unused)))
 {
-    (void)__Dev__;
-    (void)__Opts__;
+    SysErr  err;
+    SysErr* Error = &err;
 
     /* Allocate superblock and root directory vnode */
     Superblock* Sb = (Superblock*)KMalloc(sizeof(Superblock));
     if (!Sb)
     {
-        PError("DevFS: Sb alloc failed\n");
-        return 0;
+        return Error_TO_Pointer(-BadAlloc);
     }
 
     Vnode* Root = (Vnode*)KMalloc(sizeof(Vnode));
     if (!Root)
     {
-        PError("DevFS: Root vnode alloc failed\n");
-        KFree(Sb);
-        return 0;
+        KFree(Sb, Error);
+        return Error_TO_Pointer(-BadAlloc);
     }
 
     DevFsRootPriv* RPriv = (DevFsRootPriv*)KMalloc(sizeof(DevFsRootPriv));
     if (!RPriv)
     {
-        PError("DevFS: Root priv alloc failed\n");
-        KFree(Root);
-        KFree(Sb);
-        return 0;
+        KFree(Root, Error);
+        KFree(Sb, Error);
+        return Error_TO_Pointer(-BadAlloc);
     }
 
     RPriv->__Unused__ = 0;
@@ -279,7 +280,7 @@ DevFsMountImpl(const char* __Dev__ __attribute__((unused)),
     Sb->Priv  = 0;
 
     __DevSuper__ = Sb;
-    PDebug("DevFS: Superblock created\n");
+    PDebug("Superblock created\n");
     return Sb;
 }
 
@@ -288,7 +289,7 @@ DevVfsOpen(Vnode* __Node__, File* __File__)
 {
     if (!__Node__ || !__File__)
     {
-        return -1;
+        return -BadArgs;
     }
 
     if (__Node__->Type == VNodeDIR)
@@ -297,7 +298,7 @@ DevVfsOpen(Vnode* __Node__, File* __File__)
         __File__->Offset = 0;
         __File__->Refcnt = 1;
         __File__->Priv   = 0;
-        return 0;
+        return SysOkay;
     }
 
     if (__Node__->Type == VNodeDEV)
@@ -305,13 +306,13 @@ DevVfsOpen(Vnode* __Node__, File* __File__)
         DevFsNodePriv* NPriv = (DevFsNodePriv*)__Node__->Priv;
         if (!NPriv || !NPriv->Dev)
         {
-            return -1;
+            return -Dangling;
         }
 
         DevFsFileCtx* FC = (DevFsFileCtx*)KMalloc(sizeof(DevFsFileCtx));
         if (!FC)
         {
-            return -1;
+            return -BadAlloc;
         }
 
         FC->Dev    = NPriv->Dev;
@@ -333,10 +334,10 @@ DevVfsOpen(Vnode* __Node__, File* __File__)
             return NPriv->Dev->Ops.B.Open(NPriv->Dev->Context);
         }
 
-        return 0;
+        return SysOkay;
     }
 
-    return -1;
+    return -NoSuch;
 }
 
 static int
@@ -344,7 +345,7 @@ DevVfsClose(File* __File__)
 {
     if (!__File__)
     {
-        return -1;
+        return -BadArgs;
     }
 
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
@@ -362,10 +363,12 @@ DevVfsClose(File* __File__)
 
     if (__File__->Priv)
     {
-        KFree(__File__->Priv);
+        SysErr  err;
+        SysErr* Error = &err;
+        KFree(__File__->Priv, Error);
         __File__->Priv = 0;
     }
-    return 0;
+    return SysOkay;
 }
 
 static long
@@ -373,20 +376,20 @@ DevVfsRead(File* __File__, void* __Buf__, long __Len__)
 {
     if (!__File__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
 
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
     if (!FC || !FC->Dev)
     {
-        return -1;
+        return -Dangling;
     }
 
     if (FC->Dev->Type == DevChar)
     {
         if (!FC->Dev->Ops.C.Read)
         {
-            return -1;
+            return -NoOperations;
         }
         long r = FC->Dev->Ops.C.Read(FC->Dev->Context, __Buf__, __Len__);
         if (r > 0)
@@ -396,18 +399,21 @@ DevVfsRead(File* __File__, void* __Buf__, long __Len__)
         return r;
     }
 
+    SysErr  err;
+    SysErr* Error = &err;
+
     if (FC->Dev->Type == DevBlock)
     {
         if (!FC->Dev->Ops.B.ReadBlocks)
         {
-            return -1;
+            return -NoOperations;
         }
 
         /* Raw streaming over blocks: compute block span */
         long Blk = FC->Dev->Ops.B.BlockSize;
         if (Blk <= 0)
         {
-            return -1;
+            return -Limits;
         }
 
         uint8_t* Dst       = (uint8_t*)__Buf__;
@@ -426,18 +432,18 @@ DevVfsRead(File* __File__, void* __Buf__, long __Len__)
             void* Tmp = KMalloc((size_t)Blk);
             if (!Tmp)
             {
-                return (Total > 0) ? Total : -1;
+                return (Total > 0) ? Total : -BadAlloc;
             }
 
             long rb = FC->Dev->Ops.B.ReadBlocks(FC->Dev->Context, FC->Lba, Tmp, 1);
             if (rb != 1)
             {
-                KFree(Tmp);
+                KFree(Tmp, Error);
                 break;
             }
 
-            __builtin_memcpy(Dst + Total, (uint8_t*)Tmp + FC->Offset, (size_t)ToRead);
-            KFree(Tmp);
+            memcpy(Dst + Total, (uint8_t*)Tmp + FC->Offset, (size_t)ToRead);
+            KFree(Tmp, Error);
 
             Total += ToRead;
             Remaining -= ToRead;
@@ -454,7 +460,7 @@ DevVfsRead(File* __File__, void* __Buf__, long __Len__)
         return Total;
     }
 
-    return -1;
+    return -NoRead;
 }
 
 static long
@@ -462,20 +468,20 @@ DevVfsWrite(File* __File__, const void* __Buf__, long __Len__)
 {
     if (!__File__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
 
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
     if (!FC || !FC->Dev)
     {
-        return -1;
+        return -Dangling;
     }
 
     if (FC->Dev->Type == DevChar)
     {
         if (!FC->Dev->Ops.C.Write)
         {
-            return -1;
+            return -NoOperations;
         }
         long w = FC->Dev->Ops.C.Write(FC->Dev->Context, __Buf__, __Len__);
         if (w > 0)
@@ -484,18 +490,19 @@ DevVfsWrite(File* __File__, const void* __Buf__, long __Len__)
         }
         return w;
     }
-
+    SysErr  err;
+    SysErr* Error = &err;
     if (FC->Dev->Type == DevBlock)
     {
         if (!FC->Dev->Ops.B.WriteBlocks)
         {
-            return -1;
+            return -NoOperations;
         }
 
         long Blk = FC->Dev->Ops.B.BlockSize;
         if (Blk <= 0)
         {
-            return -1;
+            return -Limits;
         }
 
         const uint8_t* Src       = (const uint8_t*)__Buf__;
@@ -513,7 +520,7 @@ DevVfsWrite(File* __File__, const void* __Buf__, long __Len__)
             void* Tmp = KMalloc((size_t)Blk);
             if (!Tmp)
             {
-                return (Total > 0) ? Total : -1;
+                return (Total > 0) ? Total : -BadAlloc;
             }
 
             /* Read-modify-write current block to preserve untouched bytes */
@@ -523,10 +530,10 @@ DevVfsWrite(File* __File__, const void* __Buf__, long __Len__)
                 __builtin_memset(Tmp, 0, (size_t)Blk);
             }
 
-            __builtin_memcpy((uint8_t*)Tmp + FC->Offset, Src + Total, (size_t)ToWrite);
+            memcpy((uint8_t*)Tmp + FC->Offset, Src + Total, (size_t)ToWrite);
 
             long wb = FC->Dev->Ops.B.WriteBlocks(FC->Dev->Context, FC->Lba, Tmp, 1);
-            KFree(Tmp);
+            KFree(Tmp, Error);
             if (wb != 1)
             {
                 break;
@@ -547,7 +554,7 @@ DevVfsWrite(File* __File__, const void* __Buf__, long __Len__)
         return Total;
     }
 
-    return -1;
+    return -NoWrite;
 }
 
 static long
@@ -555,13 +562,13 @@ DevVfsLseek(File* __File__, long __Off__, int __Whence__)
 {
     if (!__File__)
     {
-        return -1;
+        return -BadArgs;
     }
 
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
     if (!FC || !FC->Dev)
     {
-        return -1;
+        return -Dangling;
     }
 
     long Base = 0;
@@ -584,12 +591,12 @@ DevVfsLseek(File* __File__, long __Off__, int __Whence__)
         }
         else
         {
-            return -1;
+            return -NotCanonical;
         }
     }
     else
     {
-        return -1;
+        return -NoSuch;
     }
 
     long New = Base + __Off__;
@@ -620,19 +627,19 @@ DevVfsIoctl(File* __File__, unsigned long __Cmd__, void* __Arg__ /*Could have us
 {
     if (!__File__)
     {
-        return -1;
+        return -BadEntity;
     }
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
     if (!FC || !FC->Dev)
     {
-        return -1;
+        return -Dangling;
     }
 
     if (FC->Dev->Type == DevChar)
     {
         if (!FC->Dev->Ops.C.Ioctl)
         {
-            return -1;
+            return -NoOperations;
         }
         return FC->Dev->Ops.C.Ioctl(FC->Dev->Context, __Cmd__, __Arg__);
     }
@@ -641,12 +648,12 @@ DevVfsIoctl(File* __File__, unsigned long __Cmd__, void* __Arg__ /*Could have us
     {
         if (!FC->Dev->Ops.B.Ioctl)
         {
-            return -1;
+            return -NoOperations;
         }
         return FC->Dev->Ops.B.Ioctl(FC->Dev->Context, __Cmd__, __Arg__);
     }
 
-    return -1;
+    return -NoSuch;
 }
 
 static int
@@ -654,7 +661,7 @@ DevVfsStat(Vnode* __Node__, VfsStat* __Out__)
 {
     if (!__Node__ || !__Out__)
     {
-        return -1;
+        return -BadArgs;
     }
 
     __Out__->Ino        = (long)(uintptr_t)__Node__;
@@ -678,7 +685,7 @@ DevVfsStat(Vnode* __Node__, VfsStat* __Out__)
     {
         __Out__->Type = VNodeDIR;
         __Out__->Size = 0;
-        return 0;
+        return SysOkay;
     }
 
     if (__Node__->Type == VNodeDEV)
@@ -690,10 +697,10 @@ DevVfsStat(Vnode* __Node__, VfsStat* __Out__)
         {
             __Out__->BlkSize = NPriv->Dev->Ops.B.BlockSize;
         }
-        return 0;
+        return SysOkay;
     }
 
-    return -1;
+    return -NoSuch;
 }
 
 static long
@@ -701,17 +708,18 @@ DevVfsReaddir(Vnode* __Dir__, void* __Buf__, long __BufLen__)
 {
     if (!__Dir__ || !__Buf__ || __BufLen__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
+
     if (__Dir__->Type != VNodeDIR)
     {
-        return -1;
+        return -BadEntity;
     }
 
     long Max = __BufLen__ / (long)sizeof(VfsDirEnt);
     if (Max <= 0)
     {
-        return -1;
+        return -TooSmall;
     }
 
     VfsDirEnt* DE    = (VfsDirEnt*)__Buf__;
@@ -767,30 +775,33 @@ DevVfsLookup(Vnode* __Dir__, const char* __Name__)
 {
     if (!__Dir__ || !__Name__)
     {
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
     if (__Dir__->Type != VNodeDIR)
     {
-        return 0;
+        return Error_TO_Pointer(-BadEntity);
     }
 
     DeviceEntry* E = __dev_find__(__Name__);
     if (!E)
     {
-        return 0;
+        return Error_TO_Pointer(-NoSuch);
     }
 
     Vnode* V = (Vnode*)KMalloc(sizeof(Vnode));
     if (!V)
     {
-        return 0;
+        return Error_TO_Pointer(-BadAlloc);
     }
+
+    SysErr  err;
+    SysErr* Error = &err;
 
     DevFsNodePriv* NPriv = (DevFsNodePriv*)KMalloc(sizeof(DevFsNodePriv));
     if (!NPriv)
     {
-        KFree(V);
-        return 0;
+        KFree(V, Error);
+        return Error_TO_Pointer(-BadAlloc);
     }
 
     NPriv->Dev = E;
@@ -806,34 +817,25 @@ DevVfsLookup(Vnode* __Dir__, const char* __Name__)
 static int
 DevVfsCreate(Vnode* __Dir__, const char* __Name__, long __Flags__, VfsPerm __Perm__)
 {
-    (void)__Dir__;
-    (void)__Name__;
-    (void)__Flags__;
-    (void)__Perm__;
-    return -1;
+    return -Impilict;
 }
 
 static int
 DevVfsMkdir(Vnode* __Dir__, const char* __Name__, VfsPerm __Perm__)
 {
-    (void)__Dir__;
-    (void)__Name__;
-    (void)__Perm__;
-    return -1;
+    return -Impilict;
 }
 
 static int
 DevVfsSync(Vnode* __Node__)
 {
-    (void)__Node__;
-    return 0;
+    return SysOkay;
 }
 
 static int
 DevVfsSuperSync(Superblock* __Sb__)
 {
-    (void)__Sb__;
-    return 0;
+    return SysOkay;
 }
 
 static int
@@ -841,7 +843,7 @@ DevVfsSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__)
 {
     if (!__Sb__ || !__Out__)
     {
-        return -1;
+        return -BadArgs;
     }
     __Out__->TypeId  = 0x64657666; /* 'devf' magic */
     __Out__->Bsize   = 0;
@@ -852,14 +854,15 @@ DevVfsSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__)
     __Out__->Ffree   = 0;
     __Out__->Namelen = 255;
     __Out__->Flags   = 0;
-    return 0;
+    return SysOkay;
 }
 
 static void
-DevVfsSuperRelease(Superblock* __Sb__)
+DevVfsSuperRelease(Superblock* __Sb__, SysErr* __Err__)
 {
     if (!__Sb__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
     if (__Sb__->Root)
@@ -867,68 +870,56 @@ DevVfsSuperRelease(Superblock* __Sb__)
         DevFsRootPriv* RPriv = (DevFsRootPriv*)__Sb__->Root->Priv;
         if (RPriv)
         {
-            KFree(RPriv);
+            KFree(RPriv, __Err__);
         }
-        KFree(__Sb__->Root);
+        KFree(__Sb__->Root, __Err__);
         __Sb__->Root = 0;
     }
-    KFree(__Sb__);
+    KFree(__Sb__, __Err__);
 }
 
 static int
 DevVfsSuperUmount(Superblock* __Sb__)
 {
-    (void)__Sb__;
-    return 0;
+    return SysOkay;
 }
 
 static long
 __null_read__(void* __Ctx__, void* __Buf__, long __Len__)
 {
-    (void)__Ctx__;
-    (void)__Buf__;
-    (void)__Len__;
     return 0; /* EOF */
 }
 
 static long
 __null_write__(void* __Ctx__, const void* __Buf__, long __Len__)
 {
-    (void)__Ctx__;
-    (void)__Buf__;
     return __Len__; /* discard */
 }
 
 static int
 __null_open__(void* __Ctx__)
 {
-    (void)__Ctx__;
-    return 0;
+    return SysOkay;
 }
 
 static int
 __null_close__(void* __Ctx__)
 {
-    (void)__Ctx__;
-    return 0;
+    return SysOkay;
 }
 
 static int
 __null_ioctl__(void* __Ctx__, unsigned long __Cmd__, void* __Arg__)
 {
-    (void)__Ctx__;
-    (void)__Cmd__;
-    (void)__Arg__;
-    return -1;
+    return -Impilict;
 }
 
 static long
 __zero_read__(void* __Ctx__, void* __Buf__, long __Len__)
 {
-    (void)__Ctx__;
     if (!__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
     __builtin_memset(__Buf__, 0, (size_t)__Len__);
     return __Len__;
@@ -937,8 +928,6 @@ __zero_read__(void* __Ctx__, void* __Buf__, long __Len__)
 static long
 __zero_write__(void* __Ctx__, const void* __Buf__, long __Len__)
 {
-    (void)__Ctx__;
-    (void)__Buf__;
     return __Len__;
 }
 
@@ -951,9 +940,9 @@ DevFsRegisterSeedDevices(void)
                           .Read  = __null_read__,
                           .Write = __null_write__,
                           .Ioctl = __null_ioctl__};
-    if (DevFsRegisterCharDevice("null", 1, 3, NullOps, 0) != 0)
+    if (DevFsRegisterCharDevice("null", 1, 3, NullOps, 0) != SysOkay)
     {
-        PWarn("DevFS: seed /dev/null failed\n"); /*Used warn because not neccessary*/
+        PWarn("cannot seed /dev/null\n"); /*Used warn because not neccessary*/
     }
 
     /* /dev/zero */
@@ -962,11 +951,11 @@ DevFsRegisterSeedDevices(void)
                           .Read  = __zero_read__,
                           .Write = __zero_write__,
                           .Ioctl = __null_ioctl__};
-    if (DevFsRegisterCharDevice("zero", 1, 5, ZeroOps, 0) != 0)
+    if (DevFsRegisterCharDevice("zero", 1, 5, ZeroOps, 0) != SysOkay)
     {
-        PWarn("DevFS: seed /dev/zero failed\n");
+        PWarn("cannot seed /dev/zero\n");
     }
 
-    PSuccess("DevFS: Seed devices registered\n");
-    return 0;
+    PSuccess("Seed devices present\n");
+    return SysOkay;
 }

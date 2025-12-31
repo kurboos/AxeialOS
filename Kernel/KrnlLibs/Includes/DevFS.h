@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KHeap.h>
 #include <KrnPrintf.h>
 #include <String.h>
@@ -73,6 +74,9 @@ int         DevFsRegisterBlockDevice(const char* __Name__,
                                      void*       __Context__);
 int         DevFsUnregisterDevice(const char* __Name__);
 int         DevFsRegisterSeedDevices(void);
+
+int CharMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index__);
+int CharMakeSubName(char* __Out__, long __Cap__, const char* __Base__, long __SubIndex__);
 
 KEXPORT(DevFsRegisterCharDevice);
 KEXPORT(DevFsRegisterBlockDevice);

@@ -1,7 +1,8 @@
+#include <Errnos.h>
 #include <PMM.h>
 
 void
-PmmDumpStats(void)
+PmmDumpStats(SysErr* __Err__)
 {
     PInfo("PMM Statistics:\n");
     KrnPrintf("  Total Pages: %lu (%lu MB)\n",
@@ -24,7 +25,7 @@ PmmDumpStats(void)
 }
 
 void
-PmmDumpRegions(void)
+PmmDumpRegions(SysErr* __Err__)
 {
     PInfo("Memory Regions (%u total):\n", Pmm.RegionCount);
 

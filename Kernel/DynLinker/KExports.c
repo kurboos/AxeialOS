@@ -1,3 +1,4 @@
+#include <Errnos.h>
 #include <KExports.h>
 #include <KrnPrintf.h>
 #include <String.h>
@@ -5,19 +6,17 @@
 void*
 KexpLookup(const char* __Name__)
 {
-    /* Validate input parameter */
     if (!__Name__)
     {
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
 
-    /* Iterate through the export table */
+    /* Iterate */
     const KExport* Cur = __start_kexports;
     const KExport* End = __stop_kexports;
 
     while (Cur < End)
     {
-        /* Check if symbol name matches */
         if (Cur->Name && strcmp(Cur->Name, __Name__) == 0)
         {
             return Cur->Addr;
@@ -27,20 +26,18 @@ KexpLookup(const char* __Name__)
     }
 
     /* Symbol not found */
-    return 0;
+    return Error_TO_Pointer(-NoSuch);
 }
 
 void
-KexpDump(void)
+KexpDump(SysErr* __Err__ _unused)
 {
-    /* Get pointers to export table boundaries */
     const KExport* Cur = __start_kexports;
     const KExport* End = __stop_kexports;
 
-    /* Print header message */
-    PInfo("KExports: Listing all kernel exports:\n");
+    PInfo("Listing all kernel exports:\n");
 
-    /* Iterate and print each symbol */
+    /* Iterate */
     while (Cur < End)
     {
         KrnPrintf("  %s => %p\n", Cur->Name, Cur->Addr);

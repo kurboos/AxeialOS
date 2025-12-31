@@ -1,17 +1,22 @@
-#include <SMP.h>  /* Symmetric multiprocessing functions */
-#include <Sync.h> /* Synchronization primitives definitions */
+#include <Errnos.h>
+#include <SMP.h>
+#include <Sync.h>
 
 void
-InitializeSemaphore(Semaphore* __Semaphore__, int32_t __InitialCount__, const char* __Name__)
+InitializeSemaphore(Semaphore*  __Semaphore__,
+                    int32_t     __InitialCount__,
+                    const char* __Name__,
+                    SysErr*     __Err__)
 {
     __Semaphore__->Count     = __InitialCount__; /* Set initial count */
     __Semaphore__->WaitQueue = 0;                /* No waiting threads initially */
-    InitializeSpinLock(&__Semaphore__->QueueLock, "SemaphoreQueue"); /* Initialize queue lock */
-    __Semaphore__->Name = __Name__;                                  /* Assign name for debugging */
+    InitializeSpinLock(
+        &__Semaphore__->QueueLock, "SemaphoreQueue", __Err__); /* Initialize queue lock */
+    __Semaphore__->Name = __Name__;                            /* Assign name for debugging */
 }
 
 void
-AcquireSemaphore(Semaphore* __Semaphore__)
+AcquireSemaphore(Semaphore* __Semaphore__, SysErr* __Err__ _unused)
 {
     while (1)
     {
@@ -30,14 +35,13 @@ AcquireSemaphore(Semaphore* __Semaphore__)
             }
             /* Compare-exchange failed, retry */
         }
-
-        /* Count is zero or compare-exchange failed, spin with pause */
+        /* Spin */
         __asm__ volatile("pause");
     }
 }
 
 void
-ReleaseSemaphore(Semaphore* __Semaphore__)
+ReleaseSemaphore(Semaphore* __Semaphore__, SysErr* __Err__ _unused)
 {
     __atomic_fetch_add(&__Semaphore__->Count, 1, __ATOMIC_RELEASE);
 }

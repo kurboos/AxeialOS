@@ -1,15 +1,14 @@
-#include <HPETTimer.h> /* HPET-specific constants and definitions */
-#include <Timer.h>     /* Timer management structures */
+#include <HPETTimer.h>
+#include <Timer.h>
 
 int
 DetectHpetTimer(void)
 {
-    return 0;
+    return SysOkay;
 }
 
 int
 InitializeHpetTimer(void)
 {
-    PInfo("Initializing HPET Timer...\n");
-    return 0;
+    return SysOkay;
 }

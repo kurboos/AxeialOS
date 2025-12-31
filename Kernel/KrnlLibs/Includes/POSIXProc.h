@@ -1,6 +1,7 @@
 #pragma once
 #include <AllTypes.h>
 #include <AxeThreads.h>
+#include <Errnos.h>
 #include <Sync.h>
 #include <VFS.h>
 #include <VMM.h>

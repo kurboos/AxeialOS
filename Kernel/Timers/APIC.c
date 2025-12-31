@@ -1,9 +1,9 @@
-#include <APICTimer.h>  /* APIC timer constants and register definitions */
-#include <LimineSMP.h>  /* Limine SMP request structures */
-#include <PerCPUData.h> /* Per-CPU data structures */
-#include <SymAP.h>      /* Symmetric Application Processor definitions */
-#include <Timer.h>      /* Global timer management structures */
-#include <VMM.h>        /* Virtual memory mapping functions */
+#include <APICTimer.h>
+#include <LimineSMP.h>
+#include <PerCPUData.h>
+#include <SymAP.h>
+#include <Timer.h>
+#include <VMM.h>
 
 static int
 CheckApicSupport(void)
@@ -14,77 +14,65 @@ CheckApicSupport(void)
 
     if (!(Edx & (1 << 9)))
     {
-        PError("APIC: CPU does not support APIC!\n");
-        return 0;
+        return -Impilict;
     }
 
-    PDebug("APIC: CPU supports APIC (CPUID.1:EDX.APIC = 1)\n");
-    return 1;
+    PDebug("CPU supports APIC (CPUID.1:EDX.APIC = 1)\n");
+    return SysOkay;
 }
 
 int
 DetectApicTimer(void)
 {
-    PDebug("APIC: detecting...\n");
-
-    if (!CheckApicSupport())
+    if (CheckApicSupport() != SysOkay)
     {
-        return 0;
+        return -Impilict;
     }
 
     uint64_t ApicBaseMsrValue = ReadMsr(TimerApicBaseMsr);
-    PDebug("APIC: Base MSR = 0x%016llX\n", ApicBaseMsrValue);
+    PDebug("Base MSR = 0x%016llX\n", ApicBaseMsrValue);
 
     if (!(ApicBaseMsrValue & TimerApicBaseEnable))
     {
-        PWarn("APIC: Not enabled in MSR, attempting to enable...\n");
         ApicBaseMsrValue |= TimerApicBaseEnable;
         WriteMsr(TimerApicBaseMsr, ApicBaseMsrValue);
 
         ApicBaseMsrValue = ReadMsr(TimerApicBaseMsr);
         if (!(ApicBaseMsrValue & TimerApicBaseEnable))
         {
-            PError("APIC: Failed to enable APIC!\n");
-            return 0;
+            return -NotCanonical;
         }
-        PDebug("APIC: Successfully enabled\n");
+        PDebug("APIC Successfully enabled\n");
     }
 
     uint64_t ApicPhysBase = ApicBaseMsrValue & 0xFFFFF000;
     Timer.ApicBase        = (uint64_t)PhysToVirt(ApicPhysBase);
-    PDebug("APIC: Physical base = 0x%016llX, Virtual base = 0x%016llX\n",
-           ApicPhysBase,
-           Timer.ApicBase);
+    PDebug("Physical base = 0x%016llX, Virtual base = 0x%016llX\n", ApicPhysBase, Timer.ApicBase);
 
     volatile uint32_t* ApicVersionReg = (volatile uint32_t*)(Timer.ApicBase + TimerApicRegVersion);
     uint32_t           VersionValue   = *ApicVersionReg;
 
     if (VersionValue == 0xFFFFFFFF || VersionValue == 0x00000000)
     {
-        PError("APIC: Invalid version register (0x%08X)\n", VersionValue);
-        return 0;
+        return -NotCanonical;
     }
 
     uint32_t ApicVersion = VersionValue & 0xFF;
     uint32_t MaxLvtEntry = (VersionValue >> 16) & 0xFF;
 
-    PDebug("APIC: Version = 0x%02X, Max LVT = %u\n", ApicVersion, MaxLvtEntry);
+    PDebug("Version = 0x%02X, Max LVT = %u\n", ApicVersion, MaxLvtEntry);
 
     if (MaxLvtEntry < 3)
     {
-        PError("APIC: Timer LVT entry not available (Max LVT = %u)\n", MaxLvtEntry);
-        return 0;
+        return -NotInit;
     }
 
-    PSuccess("APIC Timer detected successfully\n");
-    return 1;
+    return SysOkay;
 }
 
 int
 InitializeApicTimer(void)
 {
-    PInfo("APIC: Starting initialization...\n");
-
     __asm__ volatile("cli");
 
     volatile uint32_t* SpuriousReg = (volatile uint32_t*)(Timer.ApicBase + TimerApicRegSpuriousInt);
@@ -149,11 +137,11 @@ InitializeApicTimer(void)
         PerCpuData* CpuData = GetPerCpuData(CpuIndex);
         CpuData->ApicBase   = Timer.ApicBase;
 
-        PDebug("APIC: Set CPU %u APIC base to 0x%llx\n", CpuIndex, CpuData->ApicBase);
+        PDebug("Set CPU %u APIC base to 0x%llx\n", CpuIndex, CpuData->ApicBase);
     }
 
     PSuccess("APIC Timer initialized at %u Hz\n", Timer.TimerFrequency);
 
     *LvtTimer = TimerVector | TimerApicTimerPeriodic;
-    return 1;
+    return SysOkay;
 }

@@ -1,6 +1,20 @@
 #include "Pci.h"
 #include <EveryType.h>
 
+/*
+
+
+
+
+
+    ONE HUGE NOTE: This driver is deprecated because of the kernel rewrite!
+
+
+
+
+
+*/
+
 unsigned int
 PciMakeCfgAddr(int __Bus__, int __Dev__, int __Func__, int __Off__)
 {

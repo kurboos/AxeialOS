@@ -4,34 +4,28 @@
 size_t
 RamFSRead(RamFSNode* __Node__, size_t __Offset__, void* __Buffer__, size_t __Length__)
 {
-    /* Validate input parameters - similar to PMM validation patterns */
     if (!__Node__ || !__Buffer__)
     {
-        return 0;
+        return Nothing;
     }
 
-    /* Only file nodes contain readable data */
     if (__Node__->Type != RamFSNode_File)
     {
-        return 0;
+        return Nothing;
     }
 
-    /* Check if offset is beyond file size (EOF) */
     if (__Offset__ >= __Node__->Size)
     {
-        return 0;
+        return Nothing;
     }
 
-    /* Calculate available bytes from offset to EOF */
     size_t Available = (size_t)(__Node__->Size) - __Offset__;
 
-    /* Limit read to available bytes (partial read at EOF) */
     if (__Length__ > Available)
     {
         __Length__ = Available;
     }
 
-    /* Perform byte-by-byte copy (no optimization needed for RAM) */
     const uint8_t* Src = __Node__->Data + __Offset__;
     uint8_t*       Dst = (uint8_t*)__Buffer__;
 
@@ -46,15 +40,18 @@ RamFSRead(RamFSNode* __Node__, size_t __Offset__, void* __Buffer__, size_t __Len
 int
 RamFSExists(const char* __Path__)
 {
-    /* Validate inputs and filesystem state */
     if (!__Path__ || !RamFS.Root)
     {
-        return 0; /* Invalid input or filesystem not mounted */
+        return -BadArgs;
     }
 
-    /* Perform path lookup - returns NULL if path doesn't exist */
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
-    return (Node != 0) ? 1 : 0;
+    if (Probe_IF_Error(Node))
+    {
+        int Err = Pointer_TO_Error(Node);
+        return Err;
+    }
+    return SysOkay;
 }
 
 int
@@ -62,16 +59,16 @@ RamFSIsDir(const char* __Path__)
 {
     if (!__Path__ || !RamFS.Root)
     {
-        return 0;
+        return -NotCanonical;
     }
 
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
     if (!Node)
     {
-        return 0;
+        return -CannotLookup;
     }
 
-    return (Node->Type == RamFSNode_Directory) ? 1 : 0;
+    return (Node->Type == RamFSNode_Directory) ? SysOkay : -NoSuch;
 }
 
 int
@@ -79,16 +76,16 @@ RamFSIsFile(const char* __Path__)
 {
     if (!__Path__ || !RamFS.Root)
     {
-        return 0;
+        return -NotCanonical;
     }
 
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
     if (!Node)
     {
-        return 0;
+        return -CannotLookup;
     }
 
-    return (Node->Type == RamFSNode_File) ? 1 : 0;
+    return (Node->Type == RamFSNode_File) ? SysOkay : -NoSuch;
 }
 
 uint32_t
@@ -96,13 +93,13 @@ RamFSGetSize(const char* __Path__)
 {
     if (!__Path__ || !RamFS.Root)
     {
-        return 0;
+        return Nothing;
     }
 
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
     if (!Node || Node->Type != RamFSNode_File)
     {
-        return 0;
+        return Nothing;
     }
 
     return Node->Size;
@@ -113,12 +110,12 @@ RamFSListChildren(RamFSNode* __Dir__, RamFSNode** __Buffer__, uint32_t __MaxCoun
 {
     if (!__Dir__ || !__Buffer__ || __MaxCount__ == 0)
     {
-        return 0;
+        return Nothing;
     }
 
     if (__Dir__->Type != RamFSNode_Directory)
     {
-        return 0;
+        return Nothing;
     }
 
     uint32_t Count = __Dir__->ChildCount;
@@ -140,13 +137,13 @@ RamFSReadFile(const char* __Path__, void* __Buffer__)
 {
     if (!__Path__ || !__Buffer__ || !RamFS.Root)
     {
-        return 0;
+        return Nothing;
     }
 
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
     if (!Node || Node->Type != RamFSNode_File)
     {
-        return 0;
+        return Nothing;
     }
 
     /*Read the entire file starting at offset 0*/
@@ -158,12 +155,12 @@ RamFSGetChildByIndex(RamFSNode* __Dir__, uint32_t __Index__)
 {
     if (!__Dir__ || __Dir__->Type != RamFSNode_Directory)
     {
-        return 0;
+        return Error_TO_Pointer(-BadEntity);
     }
 
     if (__Index__ >= __Dir__->ChildCount)
     {
-        return 0;
+        return Error_TO_Pointer(-TooMany);
     }
 
     return __Dir__->Children[__Index__];
@@ -174,10 +171,9 @@ RamFSJoinPath(const char* __DirPath__, const char* __Name__)
 {
     if (!__DirPath__ || !__Name__)
     {
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
 
-    /* Compute lengths */
     uint32_t LDir = 0;
     while (__DirPath__[LDir] != '\0')
     {
@@ -189,7 +185,6 @@ RamFSJoinPath(const char* __DirPath__, const char* __Name__)
         LNam++;
     }
 
-    /* Determine if we need a slash */
     int NeedSlash = 1;
     if (LDir > 0 && __DirPath__[LDir - 1] == '/')
     {
@@ -201,7 +196,7 @@ RamFSJoinPath(const char* __DirPath__, const char* __Name__)
     char*    Out   = (char*)KMalloc(Total);
     if (!Out)
     {
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
 
     /* Copy dir */
@@ -211,7 +206,6 @@ RamFSJoinPath(const char* __DirPath__, const char* __Name__)
     }
     uint32_t Pos = LDir;
 
-    /* Insert slash if needed */
     if (NeedSlash)
     {
         Out[Pos++] = '/';
@@ -223,7 +217,6 @@ RamFSJoinPath(const char* __DirPath__, const char* __Name__)
         Out[Pos++] = __Name__[I];
     }
 
-    /* Terminate */
     Out[Pos] = '\0';
     return Out;
 }

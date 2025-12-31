@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KrnPrintf.h>
 #include <PMM.h>
 #include <VMM.h>
@@ -44,13 +45,13 @@ typedef struct
 
 extern KernelHeapManager KHeap;
 
-void  InitializeKHeap(void);
+void  InitializeKHeap(SysErr* __Err__);
 void* KMalloc(size_t __Size__);
-void  KFree(void* __Ptr__);
+void  KFree(void* __Ptr__, SysErr* __Err__);
 
 SlabCache* GetSlabCache(size_t __Size__);
 Slab*      AllocateSlab(uint32_t __ObjectSize__);
-void       FreeSlab(Slab* __Slab__);
+void       FreeSlab(Slab* __Slab__, SysErr* __Err__);
 
 KEXPORT(KMalloc);
 KEXPORT(KFree);

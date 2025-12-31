@@ -1,3 +1,4 @@
+#include <Errnos.h>
 #include <GDT.h>
 
 GdtEntry GdtEntries[MaxGdt /*max*/];
@@ -13,7 +14,8 @@ SetGdtEntry(int      __Index__,
             uint32_t __Base__,
             uint32_t __Limit__,
             uint8_t  __Access__,
-            uint8_t  __Granularity__)
+            uint8_t  __Granularity__,
+            SysErr*  __Err__)
 {
     /*Set lower 16 bits of base address*/
     GdtEntries[__Index__].BaseLow = (__Base__ & 0xFFFF);
@@ -43,10 +45,8 @@ SetGdtEntry(int      __Index__,
 }
 
 void
-InitializeGdt(void)
+InitializeGdt(SysErr* __Err__)
 {
-    PInfo("Initializing GDT ...\n");
-
     /*Set GDTR limit (size of GDT minus 1) and base address*/
     GdtPtr.Limit = (sizeof(GdtEntry) * MaxGdt) - 1;
     GdtPtr.Base  = (uint64_t)&GdtEntries;
@@ -58,15 +58,31 @@ InitializeGdt(void)
     }
 
     /*Configure standard x86-64 GDT entries*/
-    SetGdtEntry(GdtNullIndex, GdtBaseIgnored, GdtLimitIgnored, GdtAccessNull, GdtGranNull);
-    SetGdtEntry(
-        GdtKernelCodeIndex, GdtBaseIgnored, GdtLimitIgnored, GdtAccessKernelCode64, GdtGranCode64);
-    SetGdtEntry(
-        GdtKernelDataIndex, GdtBaseIgnored, GdtLimitIgnored, GdtAccessKernelData64, GdtGranData64);
-    SetGdtEntry(
-        GdtUserDataIndex, GdtBaseIgnored, GdtLimitIgnored, GdtAccessUserData64, GdtGranData64);
-    SetGdtEntry(
-        GdtUserCodeIndex, GdtBaseIgnored, GdtLimitIgnored, GdtAccessUserCode64, GdtGranCode64);
+    SetGdtEntry(GdtNullIndex, GdtBaseIgnored, GdtLimitIgnored, GdtAccessNull, GdtGranNull, __Err__);
+    SetGdtEntry(GdtKernelCodeIndex,
+                GdtBaseIgnored,
+                GdtLimitIgnored,
+                GdtAccessKernelCode64,
+                GdtGranCode64,
+                __Err__);
+    SetGdtEntry(GdtKernelDataIndex,
+                GdtBaseIgnored,
+                GdtLimitIgnored,
+                GdtAccessKernelData64,
+                GdtGranData64,
+                __Err__);
+    SetGdtEntry(GdtUserDataIndex,
+                GdtBaseIgnored,
+                GdtLimitIgnored,
+                GdtAccessUserData64,
+                GdtGranData64,
+                __Err__);
+    SetGdtEntry(GdtUserCodeIndex,
+                GdtBaseIgnored,
+                GdtLimitIgnored,
+                GdtAccessUserCode64,
+                GdtGranCode64,
+                __Err__);
 
     /*Load GDT into CPU using LGDT instruction*/
     __asm__ volatile("lgdt %0" : : "m"(GdtPtr) : "memory");
@@ -89,6 +105,6 @@ InitializeGdt(void)
 
     PSuccess("GDT init... OK\n");
 
-    /*Initialize Task State Segment for interrupt handling*/
-    InitializeTss();
+    /*Initialize TSS*/
+    InitializeTss(__Err__);
 }

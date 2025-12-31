@@ -1,4 +1,4 @@
-#include <Timer.h> /* Timer-related definitions and constants */
+#include <Timer.h>
 
 uint64_t
 ReadMsr(uint32_t __Msr__)

@@ -4,6 +4,8 @@
 #include <String.h>
 #include <VFS.h>
 
+/*extremely unix-like VFS*/
+
 static const long __MaxFsTypes__ = 32;
 static const long __MaxMounts__  = 64;
 
@@ -51,7 +53,7 @@ __next_comp__(const char* __Path, char* __Output, long __Cap)
 {
     if (!__Path || !*__Path)
     {
-        return 0;
+        return Nothing;
     }
     const char* s = __Path;
     long        N = 0;
@@ -73,8 +75,9 @@ __alloc_dentry__(const char* __Name__, Dentry* __Parent__, Vnode* __Node__)
     Dentry* De = (Dentry*)KMalloc(sizeof(Dentry));
     if (!De)
     {
-        return 0;
+        return Error_TO_Pointer(-BadAlloc);
     }
+
     De->Name   = __Name__;
     De->Parent = __Parent__;
     De->Node   = __Node__;
@@ -87,7 +90,7 @@ __walk__(Vnode* __StartNode__, Dentry* __StartDe__, const char* __Path__)
 {
     if (!__StartNode__ || !__Path__)
     {
-        return 0;
+        return Error_TO_Pointer(-NotCanonical);
     }
     const char* __Path = __Path__;
     if (__is_sep__(*__Path))
@@ -111,24 +114,25 @@ __walk__(Vnode* __StartNode__, Dentry* __StartDe__, const char* __Path__)
         __Path = __skip_sep__(__Path);
         if (!Cur || !Cur->Ops || !Cur->Ops->Lookup)
         {
-            return 0;
+            return Error_TO_Pointer(-NoOperations);
         }
         Vnode* Next = Cur->Ops->Lookup(Cur, Comp);
         if (!Next)
         {
-            return 0;
+            return Error_TO_Pointer(-CannotLookup);
         }
         char* Dup = (char*)KMalloc((size_t)(N + 1));
         if (!Dup)
         {
-            return 0;
+            return Error_TO_Pointer(-BadAlloc);
         }
-        __builtin_memcpy(Dup, Comp, (size_t)(N + 1));
+        memcpy(Dup, Comp, (size_t)(N + 1));
         Dentry* De = __alloc_dentry__(Dup, Parent, Next);
         if (!De)
         {
-            return 0;
+            return Error_TO_Pointer(-BadAlloc);
         }
+
         Parent = De;
         Cur    = Next;
     }
@@ -157,14 +161,18 @@ __find_mount__(const char* __Path__)
             }
         }
     }
-    return Best >= 0 ? &__Mounts__[Best] : 0;
+    return Best >= Nothing ? &__Mounts__[Best] : Nothing;
 }
 
 int
 VfsInit(void)
 {
-    AcquireMutex(&VfsLock);
-    InitializeMutex(&VfsLock, "vfs-central");
+    SysErr  err;
+    SysErr* Error = &err;
+
+    AcquireMutex(&VfsLock, Error);
+    InitializeMutex(&VfsLock, "vfs-central", Error);
+
     __FsCount__        = 0;
     __MountCount__     = 0;
     __RootNode__       = 0;
@@ -176,15 +184,18 @@ VfsInit(void)
     __FileCacheLimit__ = 0;
     __IoBlockSize__    = 0;
     __DefaultFs__[0]   = 0;
-    PDebug("VFS: Init\n");
-    ReleaseMutex(&VfsLock);
-    return 0;
+
+    PDebug("Init\n");
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsShutdown(void)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     for (long I = 0; I < __MountCount__; I++)
     {
         Superblock* Sb = __Mounts__[I].Sb;
@@ -194,7 +205,9 @@ VfsShutdown(void)
         }
         if (Sb && Sb->Ops && Sb->Ops->Release)
         {
-            Sb->Ops->Release(Sb);
+            SysErr  err;
+            SysErr* Error = &err;
+            Sb->Ops->Release(Sb, Error);
         }
         __Mounts__[I].Sb      = 0;
         __Mounts__[I].Path[0] = 0;
@@ -203,50 +216,60 @@ VfsShutdown(void)
     __FsCount__    = 0;
     __RootNode__   = 0;
     __RootDe__     = 0;
-    PDebug("VFS: Shutdown\n");
-    ReleaseMutex(&VfsLock);
-    return 0;
+
+    PDebug("Shutdown\n");
+
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsRegisterFs(const FsType* __FsType__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
+
     if (!__FsType__ || !__FsType__->Name || !__FsType__->Mount)
     {
-        PError("VFS: RegisterFs invalid\n");
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     if (__FsCount__ >= __MaxFsTypes__)
     {
-        PError("VFS: RegisterFs full: %s\n", __FsType__->Name);
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooMany;
     }
 
     for (long I = 0; I < __FsCount__; I++)
     {
         if (strcmp(__FsReg__[I]->Name, __FsType__->Name) == 0)
         {
-            PWarn("VFS: FS exists %s\n", __FsType__->Name);
-            return -1;
+            PWarn("FileSystem exists %s\n", __FsType__->Name);
+            ReleaseMutex(&VfsLock, Error);
+            return -Redefined;
         }
     }
 
     __FsReg__[__FsCount__++] = __FsType__;
-    PDebug("VFS: FS registered %s\n", __FsType__->Name);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    PDebug("FileSystem registered %s\n", __FsType__->Name);
+    ReleaseMutex(&VfsLock, Error);
+
+    return SysOkay;
 }
 
 int
 VfsUnregisterFs(const char* __Name__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
+
     if (!__Name__)
     {
-        PError("VFS: UnregisterFs NULL\n");
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     for (long I = 0; I < __FsCount__; I++)
@@ -258,14 +281,14 @@ VfsUnregisterFs(const char* __Name__)
                 __FsReg__[J] = __FsReg__[J + 1];
             }
             __FsReg__[--__FsCount__] = 0;
-            PDebug("VFS: FS unregistered %s\n", __Name__);
-            return 0;
+            PDebug("FileSystem unregistered %s\n", __Name__);
+            return SysOkay;
         }
     }
 
-    PError("VFS: FS not found %s\n", __Name__);
-    ReleaseMutex(&VfsLock);
-    return -1;
+    PError("FileSystem not found %s\n", __Name__);
+    ReleaseMutex(&VfsLock, Error);
+    return -NoSuch;
 }
 
 const FsType*
@@ -273,7 +296,7 @@ VfsFindFs(const char* __Name__)
 {
     if (!__Name__)
     {
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
 
     for (long I = 0; I < __FsCount__; I++)
@@ -284,16 +307,19 @@ VfsFindFs(const char* __Name__)
         }
     }
 
-    return 0;
+    return Error_TO_Pointer(-NoSuch);
 }
 
 long
 VfsListFs(const char** __Out__, long __Cap__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Out__ || __Cap__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     long N = (__FsCount__ < __Cap__) ? __FsCount__ : __Cap__;
@@ -302,76 +328,76 @@ VfsListFs(const char** __Out__, long __Cap__)
         __Out__[I] = __FsReg__[I]->Name;
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return N;
 }
 
 Superblock*
-VfsMount(const char* __Dev__,
-         const char* __Path__,
-         const char* __Type__,
-         long        __Flags__,
-         const char* __Opts__)
+VfsMount(const char*    __Dev__,
+         const char*    __Path__,
+         const char*    __Type__,
+         long __Flags__ _unused,
+         const char*    __Opts__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     const FsType* Fs = VfsFindFs(__Type__);
     if (!Fs)
     {
-        PError("VFS: Mount unknown FS %s\n", __Type__);
-        return 0;
+        return Error_TO_Pointer(-BadEntity);
     }
 
     if (!__Path__ || !*__Path__)
     {
-        PError("VFS: Mount invalid path\n");
-        return 0;
+        return Error_TO_Pointer(-NotCanonical);
     }
 
     long Plen = (long)strlen(__Path__);
     if (Plen <= 0 || Plen >= __MaxPath__)
     {
-        PError("VFS: Mount path len invalid\n");
-        return 0;
+        return Error_TO_Pointer(-Limits);
     }
 
     if (__MountCount__ >= __MaxMounts__)
     {
-        PError("VFS: Mount table full\n");
-        return 0;
+        return Error_TO_Pointer(-TooMany);
     }
 
     Superblock* Sb = Fs->Mount(__Dev__, __Opts__);
     if (!Sb || !Sb->Root)
     {
-        PError("VFS: Mount failed %s on %s\n", __Type__, __Path__);
-        return 0;
+        return Error_TO_Pointer(-NotRooted);
     }
 
     __MountEntry__* M = &__Mounts__[__MountCount__++];
     M->Sb             = Sb;
-    __builtin_memcpy(M->Path, __Path__, (size_t)(Plen + 1));
+    memcpy(M->Path, __Path__, (size_t)(Plen + 1));
 
     if (!__RootNode__ && strcmp(__Path__, "/") == 0)
     {
         __RootNode__ = Sb->Root;
         __RootDe__   = __alloc_dentry__("/", 0, __RootNode__);
-        PDebug("VFS: Root mounted /\n");
+        PDebug("Root mounted /\n");
     }
 
-    PDebug("VFS: Mounted %s at %s\n", __Type__, __Path__);
-    (void)__Flags__;
-    ReleaseMutex(&VfsLock);
+    PDebug("Mounted %s at %s\n", __Type__, __Path__);
+
+    ReleaseMutex(&VfsLock, Error);
     return Sb;
 }
 
 int
 VfsUnmount(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
+
     if (!__Path__)
     {
-        PError("VFS: Unmount NULL\n");
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
 
     for (long I = 0; I < __MountCount__; I++)
@@ -385,7 +411,9 @@ VfsUnmount(const char* __Path__)
             }
             if (Sb && Sb->Ops && Sb->Ops->Release)
             {
-                Sb->Ops->Release(Sb);
+                SysErr  err;
+                SysErr* Error = &err;
+                Sb->Ops->Release(Sb, Error);
             }
             for (long J = I; J < __MountCount__ - 1; J++)
             {
@@ -399,135 +427,159 @@ VfsUnmount(const char* __Path__)
                 __RootNode__ = 0;
                 __RootDe__   = 0;
             }
-            PDebug("VFS: Unmounted %s\n", __Path__);
-            return 0;
+            PDebug("Unmounted %s\n", __Path__);
+            return SysOkay;
         }
     }
 
-    PError("VFS: Unmount path not found %s\n", __Path__);
-    ReleaseMutex(&VfsLock);
-    return -1;
+    ReleaseMutex(&VfsLock, Error);
+    return -NoSuch;
 }
 
-int
+int /*chroot???*/
 VfsSwitchRoot(const char* __NewRoot__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+
+    AcquireMutex(&VfsLock, Error);
     if (!__NewRoot__)
     {
-        PError("VFS: SwitchRoot NULL\n");
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotRooted;
     }
 
     Dentry* De = VfsResolve(__NewRoot__);
     if (!De || !De->Node)
     {
-        PError("VFS: SwitchRoot resolve failed %s\n", __NewRoot__);
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -CannotLookup;
     }
 
     __RootNode__ = De->Node;
     __RootDe__   = De;
-    PDebug("VFS: Root switched to %s\n", __NewRoot__);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    PDebug("Chrooted to %s\n", __NewRoot__);
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsBindMount(const char* __Src__, const char* __Dst__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Src__ || !__Dst__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     __MountEntry__* M = __find_mount__(__Src__);
     if (!M || !M->Sb)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoSuch;
     }
 
     if (__MountCount__ >= __MaxMounts__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooMany;
     }
 
     long N = (long)strlen(__Dst__);
     if (N <= 0 || N >= __MaxPath__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
 
     __MountEntry__* New = &__Mounts__[__MountCount__++];
     New->Sb             = M->Sb;
-    __builtin_memcpy(New->Path, __Dst__, (size_t)(N + 1));
+    memcpy(New->Path, __Dst__, (size_t)(N + 1));
 
-    PDebug("VFS: Bind mount %s -> %s\n", __Src__, __Dst__);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    PDebug("Bind mount %s -> %s\n", __Src__, __Dst__);
+    ReleaseMutex(&VfsLock, Error);
+
+    return SysOkay;
 }
 
 int
 VfsMoveMount(const char* __Src__, const char* __Dst__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Src__ || !__Dst__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     __MountEntry__* M = __find_mount__(__Src__);
     if (!M || !M->Sb)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoSuch;
     }
 
     long N = (long)strlen(__Dst__);
     if (N <= 0 || N >= __MaxPath__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
 
-    __builtin_memcpy(M->Path, __Dst__, (size_t)(N + 1));
-    PDebug("VFS: Move mount %s -> %s\n", __Src__, __Dst__);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(M->Path, __Dst__, (size_t)(N + 1));
+    PDebug("Move mount %s -> %s\n", __Src__, __Dst__);
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
-VfsRemount(const char* __Path__, long __Flags__, const char* __Opts__)
+VfsRemount(const char* __Path__, long __Flags__ _unused, const char* __Opts__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Flags__;
-    (void)__Opts__;
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
+
     __MountEntry__* M = __find_mount__(__Path__);
     if (!M || !M->Sb)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoSuch;
     }
-    ReleaseMutex(&VfsLock);
-    return 0;
+
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 Dentry*
 VfsResolve(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+
+    AcquireMutex(&VfsLock, Error);
     if (!__Path__)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-NotCanonical);
     }
 
     if (!__RootNode__)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-NotRooted);
     }
 
     if (strcmp(__Path__, "/") == 0)
     {
         return __RootDe__;
     }
+
+    /*explaining this section*/
 
     __MountEntry__* M = __find_mount__(__Path__);
     if (!M)
@@ -545,7 +597,7 @@ VfsResolve(const char* __Path__)
     {
         /*Construct a dentry anchored at mount root*/
         Dentry* De = __alloc_dentry__(Mp, __RootDe__, M->Sb->Root);
-        return De ? De : 0;
+        return De ? De : Error_TO_Pointer(-NoSuch);
     }
 
     /*Otherwise, walk the subpath tail from the mount's root*/
@@ -560,20 +612,24 @@ VfsResolve(const char* __Path__)
     if (!*Tail)
     {
         Dentry* De = __alloc_dentry__(Mp, __RootDe__, M->Sb->Root);
-        return De ? De : 0;
+        return De ? De : Error_TO_Pointer(-BadAlloc);
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return __walk__(M->Sb->Root, __RootDe__, Tail);
 }
 
 Dentry*
 VfsResolveAt(Dentry* __Base__, const char* __Rel__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
+
     if (!__Base__ || !__Base__->Node || !__Rel__)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-Dangling);
     }
 
     if (!*__Rel__)
@@ -586,35 +642,42 @@ VfsResolveAt(Dentry* __Base__, const char* __Rel__)
         return VfsResolve(__Rel__);
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return __walk__(__Base__->Node, __Base__, __Rel__);
 }
 
 Vnode*
 VfsLookup(Dentry* __Base__, const char* __Name__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Base__ || !__Base__->Node || !__Name__)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-BadArgs);
     }
 
     if (!__Base__->Node->Ops || !__Base__->Node->Ops->Lookup)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-NoOperations);
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return __Base__->Node->Ops->Lookup(__Base__->Node, __Name__);
 }
 
 int
 VfsMkpath(const char* __Path__, long __Perm__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Path__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
     const char* p = __Path__;
     if (__is_sep__(*p))
@@ -639,73 +702,83 @@ VfsMkpath(const char* __Path__, long __Perm__)
         }
         p = __skip_sep__(p);
 
-        Vnode* Next = Cur->Ops ? Cur->Ops->Lookup(Cur, Comp) : 0;
+        Vnode* Next = Cur->Ops ? Cur->Ops->Lookup(Cur, Comp) : Nothing;
         if (!Next)
         {
             if (!Cur->Ops || !Cur->Ops->Mkdir)
             {
-                return -1;
+                ReleaseMutex(&VfsLock, Error);
+                return -NoOperations;
             }
             VfsPerm perm = {.Mode = __Perm__, .Uid = 0, .Gid = 0};
             if (Cur->Ops->Mkdir(Cur, Comp, perm) != 0)
             {
-                return -1;
+                ReleaseMutex(&VfsLock, Error);
+                return -ErrReturn;
             }
             Next = Cur->Ops->Lookup(Cur, Comp);
             if (!Next)
             {
-                return -1;
+                ReleaseMutex(&VfsLock, Error);
+                return -CannotLookup;
             }
         }
         char* Dup = (char*)KMalloc(N + 1);
-        __builtin_memcpy(Dup, Comp, N + 1);
+        memcpy(Dup, Comp, N + 1);
         De  = __alloc_dentry__(Dup, De, Next);
         Cur = Next;
     }
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsRealpath(const char* __Path__, char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Path__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     long L = (long)strlen(__Path__);
     if (L >= __Len__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooBig;
     }
-    __builtin_memcpy(__Buf__, __Path__, (size_t)(L + 1));
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(__Buf__, __Path__, (size_t)(L + 1));
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 File*
 VfsOpen(const char* __Path__, long __Flags__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
     if (!De || !De->Node)
     {
-        PError("VFS: Open resolve failed %s\n", __Path__);
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-BadEntity);
     }
 
     if (!De->Node->Ops || !De->Node->Ops->Open)
     {
-        PError("VFS: Open not supported %s\n", __Path__);
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-NoOperations);
     }
 
     File* F = (File*)KMalloc(sizeof(File));
     if (!F)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-BadAlloc);
     }
 
     F->Node   = De->Node;
@@ -714,37 +787,41 @@ VfsOpen(const char* __Path__, long __Flags__)
     F->Refcnt = 1;
     F->Priv   = 0;
 
-    if (De->Node->Ops->Open(De->Node, F) != 0)
+    if (De->Node->Ops->Open(De->Node, F) != SysOkay)
     {
-        KFree(F);
-        PError("VFS: Open failed %s\n", __Path__);
-        return 0;
+        KFree(F, Error);
+        return Error_TO_Pointer(-ErrReturn);
     }
 
-    PDebug("VFS: Open %s\n", __Path__);
-    ReleaseMutex(&VfsLock);
+    PDebug("Open %s\n", __Path__);
+    ReleaseMutex(&VfsLock, Error);
     return F;
 }
 
 File*
 VfsOpenAt(Dentry* __Base__, const char* __Rel__, long __Flags__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolveAt(__Base__, __Rel__);
     if (!De || !De->Node)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-BadEntity);
     }
 
     if (!De->Node->Ops || !De->Node->Ops->Open)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-NoOperations);
     }
 
     File* F = (File*)KMalloc(sizeof(File));
     if (!F)
     {
-        return 0;
+        ReleaseMutex(&VfsLock, Error);
+        return Error_TO_Pointer(-BadAlloc);
     }
 
     F->Node   = De->Node;
@@ -753,23 +830,27 @@ VfsOpenAt(Dentry* __Base__, const char* __Rel__, long __Flags__)
     F->Refcnt = 1;
     F->Priv   = 0;
 
-    if (De->Node->Ops->Open(De->Node, F) != 0)
+    if (De->Node->Ops->Open(De->Node, F) != SysOkay)
     {
-        KFree(F);
-        return 0;
+        KFree(F, Error);
+        return Error_TO_Pointer(-ErrReturn);
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return F;
 }
 
 int
 VfsClose(File* __File__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
+
     if (!__File__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     if (__File__->Node && __File__->Node->Ops && __File__->Node->Ops->Close)
@@ -777,23 +858,27 @@ VfsClose(File* __File__)
         __File__->Node->Ops->Close(__File__);
     }
 
-    KFree(__File__);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    KFree(__File__, Error);
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 long
 VfsRead(File* __File__, void* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__File__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     if (!__File__->Node || !__File__->Node->Ops || !__File__->Node->Ops->Read)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
     long Got = __File__->Node->Ops->Read(__File__, __Buf__, __Len__);
@@ -801,22 +886,26 @@ VfsRead(File* __File__, void* __Buf__, long __Len__)
     {
         __File__->Offset += Got;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return Got;
 }
 
 long
 VfsWrite(File* __File__, const void* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__File__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     if (!__File__->Node || !__File__->Node->Ops || !__File__->Node->Ops->Write)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
     long Put = __File__->Node->Ops->Write(__File__, __Buf__, __Len__);
@@ -824,22 +913,26 @@ VfsWrite(File* __File__, const void* __Buf__, long __Len__)
     {
         __File__->Offset += Put;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return Put;
 }
 
 long
 VfsLseek(File* __File__, long __Off__, int __Whence__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__File__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadEntity;
     }
 
     if (!__File__->Node || !__File__->Node->Ops || !__File__->Node->Ops->Lseek)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
     long New = __File__->Node->Ops->Lseek(__File__, __Off__, __Whence__);
@@ -847,139 +940,168 @@ VfsLseek(File* __File__, long __Off__, int __Whence__)
     {
         __File__->Offset = New;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return New;
 }
 
 int
 VfsIoctl(File* __File__, unsigned long __Cmd__, void* __Arg__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__File__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadEntity;
     }
 
     if (!__File__->Node || !__File__->Node->Ops || !__File__->Node->Ops->Ioctl)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return __File__->Node->Ops->Ioctl(__File__, __Cmd__, __Arg__);
 }
 
 int
 VfsFsync(File* __File__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__File__ || !__File__->Node || !__File__->Node->Ops)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     if (!__File__->Node->Ops->Sync)
     {
-        return 0;
+        return SysOkay;
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return __File__->Node->Ops->Sync(__File__->Node);
 }
 
 int
 VfsFstats(File* __File__, VfsStat* __Buf__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__File__ || !__Buf__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     if (!__File__->Node || !__File__->Node->Ops || !__File__->Node->Ops->Stat)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return __File__->Node->Ops->Stat(__File__->Node, __Buf__);
 }
 
 int
 VfsStats(const char* __Path__, VfsStat* __Buf__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Path__ || !__Buf__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     Dentry* De = VfsResolve(__Path__);
     if (!De || !De->Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
 
     if (!De->Node->Ops || !De->Node->Ops->Stat)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return De->Node->Ops->Stat(De->Node, __Buf__);
 }
 
 long
 VfsReaddir(const char* __Path__, void* __Buf__, long __BufLen__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
+
     if (!__Path__ || !__Buf__ || __BufLen__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     Dentry* De = VfsResolve(__Path__);
     if (!De || !De->Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
 
     if (!De->Node->Ops || !De->Node->Ops->Readdir)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return De->Node->Ops->Readdir(De->Node, __Buf__, __BufLen__);
 }
 
 long
 VfsReaddirF(File* __Dir__, void* __Buf__, long __BufLen__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Dir__ || !__Buf__ || __BufLen__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     if (!__Dir__->Node || !__Dir__->Node->Ops || !__Dir__->Node->Ops->Readdir)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return __Dir__->Node->Ops->Readdir(__Dir__->Node, __Buf__, __BufLen__);
 }
 
 int
 VfsCreate(const char* __Path__, long __Flags__, VfsPerm __Perm__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* Parent = 0;
     char    Name[256];
     if (!__Path__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
     const char* __Path = __Path__;
     if (__is_sep__(*__Path))
@@ -1007,43 +1129,51 @@ VfsCreate(const char* __Path__, long __Flags__, VfsPerm __Perm__)
         }
         if (!Cur || !Cur->Ops || !Cur->Ops->Lookup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoOperations;
         }
         Vnode* Next = Cur->Ops->Lookup(Cur, Name);
         if (!Next)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -CannotLookup;
         }
         char* Dup = (char*)KMalloc((size_t)(N + 1));
         if (!Dup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
-        __builtin_memcpy(Dup, Name, (size_t)(N + 1));
+        memcpy(Dup, Name, (size_t)(N + 1));
         De = __alloc_dentry__(Dup, De, Next);
         if (!De)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
         Cur = Next;
     }
     if (!Parent || !Parent->Node || !Parent->Node->Ops || !Parent->Node->Ops->Create)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return Parent->Node->Ops->Create(Parent->Node, Name, __Flags__, __Perm__);
 }
 
 int
 VfsUnlink(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* Base = 0;
     char    Name[256];
     if (!__Path__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
     const char* __Path = __Path__;
     if (__is_sep__(*__Path))
@@ -1071,44 +1201,51 @@ VfsUnlink(const char* __Path__)
         }
         if (!Cur || !Cur->Ops || !Cur->Ops->Lookup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoOperations;
         }
         Vnode* Next = Cur->Ops->Lookup(Cur, Name);
         if (!Next)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -CannotLookup;
         }
         char* Dup = (char*)KMalloc((size_t)(N + 1));
         if (!Dup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
-        __builtin_memcpy(Dup, Name, (size_t)(N + 1));
+        memcpy(Dup, Name, (size_t)(N + 1));
         De = __alloc_dentry__(Dup, De, Next);
         if (!De)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
         Cur = Next;
     }
     if (!Base || !Base->Node || !Base->Node->Ops || !Base->Node->Ops->Unlink)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return Base->Node->Ops->Unlink(Base->Node, Name);
 }
 
 int
 VfsMkdir(const char* __Path__, VfsPerm __Perm__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* Base = 0;
     char    Name[256];
     if (!__Path__)
     {
-        ReleaseMutex(&VfsLock);
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
     const char* __PathCur = __Path__;
     if (__is_sep__(*__PathCur))
@@ -1136,48 +1273,51 @@ VfsMkdir(const char* __Path__, VfsPerm __Perm__)
         }
         if (!Cur || !Cur->Ops || !Cur->Ops->Lookup)
         {
-            ReleaseMutex(&VfsLock);
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoOperations;
         }
         Vnode* Next = Cur->Ops->Lookup(Cur, Name);
         if (!Next)
         {
-            ReleaseMutex(&VfsLock);
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -CannotLookup;
         }
         char* Dup = (char*)KMalloc((size_t)(N + 1));
         if (!Dup)
         {
-            ReleaseMutex(&VfsLock);
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
-        __builtin_memcpy(Dup, Name, (size_t)(N + 1));
+        memcpy(Dup, Name, (size_t)(N + 1));
         De = __alloc_dentry__(Dup, De, Next);
         if (!De)
         {
-            ReleaseMutex(&VfsLock);
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
         Cur = Next;
     }
     if (!Base || !Base->Node || !Base->Node->Ops || !Base->Node->Ops->Mkdir)
     {
-        ReleaseMutex(&VfsLock);
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return Base->Node->Ops->Mkdir(Base->Node, Name, __Perm__);
 }
 
 int
 VfsRmdir(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* Base = 0;
     char    Name[256];
     if (!__Path__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
     const char* p = __Path__;
     if (__is_sep__(*p))
@@ -1205,35 +1345,41 @@ VfsRmdir(const char* __Path__)
         }
         if (!Cur || !Cur->Ops || !Cur->Ops->Lookup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoOperations;
         }
         Vnode* Next = Cur->Ops->Lookup(Cur, Name);
         if (!Next)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -CannotLookup;
         }
         char* Dup = (char*)KMalloc(N + 1);
-        __builtin_memcpy(Dup, Name, N + 1);
+        memcpy(Dup, Name, N + 1);
         De  = __alloc_dentry__(Dup, De, Next);
         Cur = Next;
     }
     if (!Base || !Base->Node || !Base->Node->Ops || !Base->Node->Ops->Rmdir)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return Base->Node->Ops->Rmdir(Base->Node, Name);
 }
 
 int
 VfsSymlink(const char* __Target__, const char* __LinkPath__, VfsPerm __Perm__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* Base = 0;
     char    Name[256];
     if (!__LinkPath__ || !__Target__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
     const char* __Path = __LinkPath__;
     if (__is_sep__(*__Path))
@@ -1261,67 +1407,80 @@ VfsSymlink(const char* __Target__, const char* __LinkPath__, VfsPerm __Perm__)
         }
         if (!Cur || !Cur->Ops || !Cur->Ops->Lookup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoOperations;
         }
         Vnode* Next = Cur->Ops->Lookup(Cur, Name);
         if (!Next)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -CannotLookup;
         }
         char* Dup = (char*)KMalloc((size_t)(N + 1));
         if (!Dup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
-        __builtin_memcpy(Dup, Name, (size_t)(N + 1));
+        memcpy(Dup, Name, (size_t)(N + 1));
         De = __alloc_dentry__(Dup, De, Next);
         if (!De)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
         Cur = Next;
     }
     if (!Base || !Base->Node || !Base->Node->Ops || !Base->Node->Ops->Symlink)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return Base->Node->Ops->Symlink(Base->Node, Name, __Target__, __Perm__);
 }
 
 int
 VfsReadlink(const char* __Path__, char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Path__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     Dentry* De = VfsResolve(__Path__);
     if (!De || !De->Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
     if (!De->Node->Ops || !De->Node->Ops->Readlink)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
 
     VfsNameBuf NB;
     NB.Buf = __Buf__;
     NB.Len = __Len__;
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return De->Node->Ops->Readlink(De->Node, &NB);
 }
 
 int
 VfsLink(const char* __OldPath__, const char* __NewPath__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__OldPath__ || !__NewPath__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
 
     Dentry* OldDe   = VfsResolve(__OldPath__);
@@ -1330,7 +1489,8 @@ VfsLink(const char* __OldPath__, const char* __NewPath__)
 
     if (!OldDe || !OldDe->Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
 
     const char* __Path = __NewPath__;
@@ -1359,39 +1519,46 @@ VfsLink(const char* __OldPath__, const char* __NewPath__)
         }
         if (!Cur || !Cur->Ops || !Cur->Ops->Lookup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoOperations;
         }
         Vnode* Next = Cur->Ops->Lookup(Cur, Name);
         if (!Next)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -CannotLookup;
         }
         char* Dup = (char*)KMalloc((size_t)(N + 1));
         if (!Dup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
-        __builtin_memcpy(Dup, Name, (size_t)(N + 1));
+        memcpy(Dup, Name, (size_t)(N + 1));
         De = __alloc_dentry__(Dup, De, Next);
         if (!De)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
         Cur = Next;
     }
 
     if (!NewBase || !NewBase->Node || !NewBase->Node->Ops || !NewBase->Node->Ops->Link)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return NewBase->Node->Ops->Link(NewBase->Node, OldDe->Node, Name);
 }
 
 int
 VfsRename(const char* __OldPath__, const char* __NewPath__, long __Flags__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* OldBase = 0;
     Dentry* NewBase = 0;
     char    OldName[256];
@@ -1399,7 +1566,8 @@ VfsRename(const char* __OldPath__, const char* __NewPath__, long __Flags__)
 
     if (!__OldPath__ || !__NewPath__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
 
     const char* po = __OldPath__;
@@ -1428,23 +1596,27 @@ VfsRename(const char* __OldPath__, const char* __NewPath__, long __Flags__)
         }
         if (!CurO || !CurO->Ops || !CurO->Ops->Lookup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoOperations;
         }
         Vnode* Next = CurO->Ops->Lookup(CurO, OldName);
         if (!Next)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -CannotLookup;
         }
         char* Dup = (char*)KMalloc((size_t)(N + 1));
         if (!Dup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
-        __builtin_memcpy(Dup, OldName, (size_t)(N + 1));
+        memcpy(Dup, OldName, (size_t)(N + 1));
         DeO = __alloc_dentry__(Dup, DeO, Next);
         if (!DeO)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
         CurO = Next;
     }
@@ -1475,385 +1647,437 @@ VfsRename(const char* __OldPath__, const char* __NewPath__, long __Flags__)
         }
         if (!CurN || !CurN->Ops || !CurN->Ops->Lookup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoOperations;
         }
         Vnode* Next = CurN->Ops->Lookup(CurN, NewName);
         if (!Next)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -CannotLookup;
         }
         char* Dup = (char*)KMalloc((size_t)(N + 1));
         if (!Dup)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
-        __builtin_memcpy(Dup, NewName, (size_t)(N + 1));
+        memcpy(Dup, NewName, (size_t)(N + 1));
         DeN = __alloc_dentry__(Dup, DeN, Next);
         if (!DeN)
         {
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -BadAlloc;
         }
         CurN = Next;
     }
 
     if (!OldBase || !NewBase)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
     if (!OldBase->Node || !NewBase->Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
     if (!OldBase->Node->Ops || !OldBase->Node->Ops->Rename)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return OldBase->Node->Ops->Rename(OldBase->Node, OldName, NewBase->Node, NewName, __Flags__);
 }
 
 int
 VfsChmod(const char* __Path__, long __Mode__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
     if (!De || !De->Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
     if (!De->Node->Ops || !De->Node->Ops->Chmod)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return De->Node->Ops->Chmod(De->Node, __Mode__);
 }
 
 int
 VfsChown(const char* __Path__, long __Uid__, long __Gid__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
     if (!De || !De->Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
     if (!De->Node->Ops || !De->Node->Ops->Chown)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return De->Node->Ops->Chown(De->Node, __Uid__, __Gid__);
 }
 
 int
 VfsTruncate(const char* __Path__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
     if (!De || !De->Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -Dangling;
     }
     if (!De->Node->Ops || !De->Node->Ops->Truncate)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return De->Node->Ops->Truncate(De->Node, __Len__);
 }
 
 int
 VnodeRefInc(Vnode* __Node__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Node__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     __Node__->Refcnt++;
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return (int)__Node__->Refcnt;
 }
 
 int
 VnodeRefDec(Vnode* __Node__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Node__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     if (__Node__->Refcnt > 0)
     {
         __Node__->Refcnt--;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return (int)__Node__->Refcnt;
 }
 
 int
 VnodeGetAttr(Vnode* __Node__, VfsStat* __Buf__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Node__ || !__Buf__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     if (!__Node__->Ops || !__Node__->Ops->Stat)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NoOperations;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return __Node__->Ops->Stat(__Node__, __Buf__);
 }
 
 int
-VnodeSetAttr(Vnode* __Node__, const VfsStat* __Buf__)
+VnodeSetAttr(Vnode* __Node__ _unused, const VfsStat* __Buf__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Node__;
-    (void)__Buf__;
-    ReleaseMutex(&VfsLock);
-    return -1;
+    return -Impilict;
 }
 
 int
 DentryInvalidate(Dentry* __De__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__De__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     __De__->Flags |= 1;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 DentryRevalidate(Dentry* __De__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__De__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     __De__->Flags &= ~1;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 DentryAttach(Dentry* __De__, Vnode* __Node__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__De__ || !__Node__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     __De__->Node = __Node__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 DentryDetach(Dentry* __De__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__De__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     __De__->Node = 0;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 DentryName(Dentry* __De__, char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__De__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     long N = (long)strlen(__De__->Name);
     if (N >= __Len__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooBig;
     }
-    __builtin_memcpy(__Buf__, __De__->Name, (size_t)(N + 1));
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(__Buf__, __De__->Name, (size_t)(N + 1));
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
-VfsSetCwd(const char* __Path__)
+VfsSetCwd(const char* __Path__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Path__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    return SysOkay;
 }
 
 int
 VfsGetCwd(char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     const char* __Path = "/";
     long        N      = (long)strlen(__Path);
     if (N >= __Len__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooBig;
     }
-    __builtin_memcpy(__Buf__, __Path, (size_t)(N + 1));
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(__Buf__, __Path, (size_t)(N + 1));
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsSetRoot(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
     return VfsSwitchRoot(__Path__);
 }
 
 int
 VfsGetRoot(char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     const char* __Path = "/";
     long        N      = (long)strlen(__Path);
     if (N >= __Len__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooBig;
     }
-    __builtin_memcpy(__Buf__, __Path, (size_t)(N + 1));
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(__Buf__, __Path, (size_t)(N + 1));
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsSetUmask(long __Mode__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     __Umask__ = __Mode__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 long
 VfsGetUmask(void)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
     return __Umask__;
 }
 
 int
-VfsNotifySubscribe(const char* __Path__, long __Mask__)
+VfsNotifySubscribe(const char* __Path__ _unused, long __Mask__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Path__;
-    (void)__Mask__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    return SysOkay;
 }
 
 int
-VfsNotifyUnsubscribe(const char* __Path__)
+VfsNotifyUnsubscribe(const char* __Path__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Path__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    return SysOkay;
 }
 
 int
-VfsNotifyPoll(const char* __Path__, long* __OutMask__)
+VfsNotifyPoll(const char* __Path__ _unused, long* __OutMask__)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Path__;
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__OutMask__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadEntity;
     }
     *__OutMask__ = 0;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
-VfsAccess(const char* __Path__, long __Mode__)
+VfsAccess(const char* __Path__, long __Mode__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Mode__;
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
-    ReleaseMutex(&VfsLock);
-    return De ? 0 : -1;
+    ReleaseMutex(&VfsLock, Error);
+    return De ? Nothing : -Dangling;
 }
 
 int
 VfsExists(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
-    ReleaseMutex(&VfsLock);
-    return De ? 1 : 0;
+    ReleaseMutex(&VfsLock, Error);
+    return De ? SysOkay : -NoSuch;
 }
 
 int
 VfsIsDir(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
-    ReleaseMutex(&VfsLock);
-    return (De && De->Node && De->Node->Type == VNodeDIR) ? 1 : 0;
+    ReleaseMutex(&VfsLock, Error);
+    return (De && De->Node && De->Node->Type == VNodeDIR) ? SysOkay : -NoSuch;
 }
 
 int
 VfsIsFile(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
-    ReleaseMutex(&VfsLock);
-    return (De && De->Node && De->Node->Type == VNodeFILE) ? 1 : 0;
+    ReleaseMutex(&VfsLock, Error);
+    return (De && De->Node && De->Node->Type == VNodeFILE) ? SysOkay : -NoSuch;
 }
 
 int
 VfsIsSymlink(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     Dentry* De = VfsResolve(__Path__);
-    ReleaseMutex(&VfsLock);
-    return (De && De->Node && De->Node->Type == VNodeSYM) ? 1 : 0;
+    ReleaseMutex(&VfsLock, Error);
+    return (De && De->Node && De->Node->Type == VNodeSYM) ? SysOkay : -NoSuch;
 }
 
 int
-VfsCopy(const char* __Src__, const char* __Dst__, long __Flags__)
+VfsCopy(const char* __Src__, const char* __Dst__, long __Flags__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Flags__;
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
+
     File* S = VfsOpen(__Src__, VFlgRDONLY);
     if (!S)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadEntity;
     }
     File* D = VfsOpen(__Dst__, VFlgCREATE | VFlgWRONLY | VFlgTRUNC);
     if (!D)
     {
         VfsClose(S);
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadEntity;
     }
 
     char Buf[4096];
@@ -1864,7 +2088,8 @@ VfsCopy(const char* __Src__, const char* __Dst__, long __Flags__)
         {
             VfsClose(S);
             VfsClose(D);
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoRead;
         }
         if (r == 0)
         {
@@ -1875,42 +2100,49 @@ VfsCopy(const char* __Src__, const char* __Dst__, long __Flags__)
         {
             VfsClose(S);
             VfsClose(D);
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoWrite;
         }
     }
 
     VfsClose(S);
     VfsClose(D);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsMove(const char* __Src__, const char* __Dst__, long __Flags__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     int rc = VfsRename(__Src__, __Dst__, __Flags__);
-    if (rc == 0)
+    if (rc == SysOkay)
     {
-        return 0;
+        return SysOkay;
     }
     rc = VfsCopy(__Src__, __Dst__, __Flags__);
-    if (rc != 0)
+    if (rc != SysOkay)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -ErrReturn;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return VfsUnlink(__Src__);
 }
 
 int
 VfsReadAll(const char* __Path__, void* __Buf__, long __BufLen__, long* __OutLen__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     File* F = VfsOpen(__Path__, VFlgRDONLY);
     if (!F)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadEntity;
     }
     long total = 0;
     while (total < __BufLen__)
@@ -1919,7 +2151,8 @@ VfsReadAll(const char* __Path__, void* __Buf__, long __BufLen__, long* __OutLen_
         if (r < 0)
         {
             VfsClose(F);
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoRead;
         }
         if (r == 0)
         {
@@ -1932,18 +2165,21 @@ VfsReadAll(const char* __Path__, void* __Buf__, long __BufLen__, long* __OutLen_
         *__OutLen__ = total;
     }
     VfsClose(F);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsWriteAll(const char* __Path__, const void* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     File* F = VfsOpen(__Path__, VFlgCREATE | VFlgWRONLY | VFlgTRUNC);
     if (!F)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadEntity;
     }
     long total = 0;
     while (total < __Len__)
@@ -1952,22 +2188,26 @@ VfsWriteAll(const char* __Path__, const void* __Buf__, long __Len__)
         if (w <= 0)
         {
             VfsClose(F);
-            return -1;
+            ReleaseMutex(&VfsLock, Error);
+            return -NoRead;
         }
         total += w;
     }
     VfsClose(F);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsMountTableEnumerate(char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     long off = 0;
     for (long I = 0; I < __MountCount__; I++)
@@ -1978,7 +2218,7 @@ VfsMountTableEnumerate(char* __Buf__, long __Len__)
         {
             break;
         }
-        __builtin_memcpy(__Buf__ + off, __Path, (size_t)N);
+        memcpy(__Buf__ + off, __Path, (size_t)N);
         off += N;
         __Buf__[off++] = '\n';
     }
@@ -1986,17 +2226,20 @@ VfsMountTableEnumerate(char* __Buf__, long __Len__)
     {
         __Buf__[off] = 0;
     }
-    ReleaseMutex(&VfsLock);
+    ReleaseMutex(&VfsLock, Error);
     return (int)off;
 }
 
 int
 VfsMountTableFind(const char* __Path__, char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Path__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     for (long I = 0; I < __MountCount__; I++)
     {
@@ -2005,138 +2248,146 @@ VfsMountTableFind(const char* __Path__, char* __Buf__, long __Len__)
             long N = (long)strlen(__Mounts__[I].Path);
             if (N >= __Len__)
             {
-                return -1;
+                ReleaseMutex(&VfsLock, Error);
+                return -TooBig;
             }
-            __builtin_memcpy(__Buf__, __Mounts__[I].Path, (size_t)(N + 1));
-            return 0;
+            memcpy(__Buf__, __Mounts__[I].Path, (size_t)(N + 1));
+            return SysOkay;
         }
     }
-    ReleaseMutex(&VfsLock);
-    return -1;
+    ReleaseMutex(&VfsLock, Error);
+    return -NoSuch;
 }
 
 int
-VfsNodePath(Vnode* __Node__, char* __Buf__, long __Len__)
+VfsNodePath(Vnode* __Node__ _unused, char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Node__;
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     const char* __Path = "/";
     long        N      = (long)strlen(__Path);
     if (N >= __Len__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooBig;
     }
-    __builtin_memcpy(__Buf__, __Path, (size_t)(N + 1));
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(__Buf__, __Path, (size_t)(N + 1));
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
-VfsNodeName(Vnode* __Node__, char* __Buf__, long __Len__)
+VfsNodeName(Vnode* __Node__ _unused, char* __Buf__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Node__;
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     const char* __Path = "";
     long        N      = (long)strlen(__Path);
     if (N >= __Len__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooBig;
     }
-    __builtin_memcpy(__Buf__, __Path, (size_t)(N + 1));
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(__Buf__, __Path, (size_t)(N + 1));
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsAllocName(char** __Out__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Out__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     *__Out__ = (char*)KMalloc((size_t)__Len__);
-    ReleaseMutex(&VfsLock);
-    return *__Out__ ? 0 : -1;
+    ReleaseMutex(&VfsLock, Error);
+    return *__Out__ ? Nothing : -NotCanonical;
 }
 
 int
 VfsFreeName(char* __Name__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Name__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
-    KFree(__Name__);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    KFree(__Name__, Error);
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsJoinPath(const char* __A__, const char* __B__, char* __Out__, long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__A__ || !__B__ || !__Out__ || __Len__ <= 0)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     long la   = (long)strlen(__A__);
     long lb   = (long)strlen(__B__);
     long need = la + 1 + lb + 1;
     if (need > __Len__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooBig;
     }
-    __builtin_memcpy(__Out__, __A__, (size_t)la);
+    memcpy(__Out__, __A__, (size_t)la);
     __Out__[la] = '/';
-    __builtin_memcpy(__Out__ + la + 1, __B__, (size_t)lb);
+    memcpy(__Out__ + la + 1, __B__, (size_t)lb);
     __Out__[la + 1 + lb] = 0;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
-VfsSetFlag(const char* __Path__, long __Flag__)
+VfsSetFlag(const char* __Path__ _unused, long __Flag__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Path__;
-    (void)__Flag__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    return SysOkay;
 }
 
 int
-VfsClearFlag(const char* __Path__, long __Flag__)
+VfsClearFlag(const char* __Path__ _unused, long __Flag__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Path__;
-    (void)__Flag__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    return SysOkay;
 }
 
 long
-VfsGetFlags(const char* __Path__)
+VfsGetFlags(const char* __Path__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Path__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    return SysOkay;
 }
 
 int
 VfsSyncAll(void)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     for (long I = 0; I < __MountCount__; I++)
     {
         Superblock* Sb = __Mounts__[I].Sb;
@@ -2145,25 +2396,26 @@ VfsSyncAll(void)
             Sb->Ops->Sync(Sb);
         }
     }
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsPruneCaches(void)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    return SysOkay;
 }
 
 int
 VfsRegisterDevNode(const char* __Path__, void* __Priv__, long __Flags__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Path__ || !__Priv__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
 
     /* Ensure parent directory exists */
@@ -2172,13 +2424,14 @@ VfsRegisterDevNode(const char* __Path__, void* __Priv__, long __Flags__)
     const char* Name = strrchr(Buf, '/');
     if (!Name)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -NotCanonical;
     }
     long nlen = (long)strlen(Name + 1);
 
     char Parent[1024];
     long plen = (long)(Name - Buf);
-    __builtin_memcpy(Parent, Buf, plen);
+    memcpy(Parent, Buf, plen);
     Parent[plen] = 0;
     VfsMkpath(Parent, 0);
 
@@ -2186,7 +2439,8 @@ VfsRegisterDevNode(const char* __Path__, void* __Priv__, long __Flags__)
     Vnode* Node = (Vnode*)KMalloc(sizeof(Vnode));
     if (!Node)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadAlloc;
     }
     Node->Type   = VNodeDEV;
     Node->Ops    = (VnodeOps*)__Priv__; /* device ops table */
@@ -2195,72 +2449,76 @@ VfsRegisterDevNode(const char* __Path__, void* __Priv__, long __Flags__)
     Node->Refcnt = 1;
 
     char* Dup = (char*)KMalloc(nlen + 1);
-    __builtin_memcpy(Dup, Name + 1, nlen + 1);
+    memcpy(Dup, Name + 1, nlen + 1);
     Dentry* De = __alloc_dentry__(Dup, __RootDe__, Node);
     if (!De)
     {
-        KFree(Node);
-        return -1;
+        KFree(Node, Error);
+        ReleaseMutex(&VfsLock, Error);
+        return -BadAlloc;
     }
 
-    PDebug("VFS: Registered devnode %s\n", __Path__);
-    ReleaseMutex(&VfsLock);
-    return 0;
+    PDebug("Registered devnode %s\n", __Path__);
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
-VfsUnregisterDevNode(const char* __Path__)
+VfsUnregisterDevNode(const char* __Path__ _unused)
 {
-    AcquireMutex(&VfsLock);
-    (void)__Path__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    return SysOkay;
 }
 
 int
 VfsRegisterPseudoFs(const char* __Path__, Superblock* __Sb__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Path__ || !__Sb__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     if (__MountCount__ >= __MaxMounts__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooMany;
     }
     long            N = (long)strlen(__Path__);
     __MountEntry__* M = &__Mounts__[__MountCount__++];
     M->Sb             = __Sb__;
-    __builtin_memcpy(M->Path, __Path__, (size_t)(N + 1));
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(M->Path, __Path__, (size_t)(N + 1));
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 int
 VfsUnregisterPseudoFs(const char* __Path__)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
     return VfsUnmount(__Path__);
 }
 
 int
 VfsSetDefaultFs(const char* __Name__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (!__Name__)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -BadArgs;
     }
     long N = (long)strlen(__Name__);
     if (N >= (long)sizeof(__DefaultFs__))
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooBig;
     }
-    __builtin_memcpy(__DefaultFs__, __Name__, (size_t)(N + 1));
-    ReleaseMutex(&VfsLock);
-    return 0;
+    memcpy(__DefaultFs__, __Name__, (size_t)(N + 1));
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 const char*
@@ -2272,92 +2530,94 @@ VfsGetDefaultFs(void)
 int
 VfsSetMaxName(long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (__Len__ < 1)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooSmall;
     }
     __MaxName__ = __Len__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 long
 VfsGetMaxName(void)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
     return __MaxName__;
 }
 
 int
 VfsSetMaxPath(long __Len__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     if (__Len__ < 1)
     {
-        return -1;
+        ReleaseMutex(&VfsLock, Error);
+        return -TooSmall;
     }
     __MaxPath__ = __Len__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 long
 VfsGetMaxPath(void)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
     return __MaxPath__;
 }
 
 int
 VfsSetDirCacheLimit(long __Val__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     __DirCacheLimit__ = __Val__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 long
 VfsGetDirCacheLimit(void)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
     return __DirCacheLimit__;
 }
 
 int
 VfsSetFileCacheLimit(long __Val__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     __FileCacheLimit__ = __Val__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 long
 VfsGetFileCacheLimit(void)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
     return __FileCacheLimit__;
 }
 
 int
 VfsSetIoBlockSize(long __Val__)
 {
-    AcquireMutex(&VfsLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireMutex(&VfsLock, Error);
     __IoBlockSize__ = __Val__;
-    ReleaseMutex(&VfsLock);
-    return 0;
+    ReleaseMutex(&VfsLock, Error);
+    return SysOkay;
 }
 
 long
 VfsGetIoBlockSize(void)
 {
-    AcquireMutex(&VfsLock);
-    ReleaseMutex(&VfsLock);
     return __IoBlockSize__;
 }

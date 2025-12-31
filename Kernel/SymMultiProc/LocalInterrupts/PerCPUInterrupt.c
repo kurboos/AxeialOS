@@ -1,14 +1,14 @@
-#include <GDT.h>        /* Global Descriptor Table definitions */
-#include <PerCPUData.h> /* Per-CPU data structure definitions */
-#include <SMP.h>        /* SMP management structures and constants */
-#include <SymAP.h>      /* Symmetric Application Processor definitions */
-#include <Timer.h>      /* Timer interfaces for per-CPU timer data */
-#include <VMM.h>        /* Virtual Memory Management for address translation */
+#include <GDT.h>
+#include <PerCPUData.h>
+#include <SMP.h>
+#include <SymAP.h>
+#include <Timer.h>
+#include <VMM.h>
 
 PerCpuData CpuDataArray[MaxCPUs];
 
 void
-PerCpuInterruptInit(uint32_t __CpuNumber__, uint64_t __StackTop__)
+PerCpuInterruptInit(uint32_t __CpuNumber__, uint64_t __StackTop__, SysErr* __Err__)
 {
     PerCpuData* CpuData = &CpuDataArray[__CpuNumber__];
 
@@ -107,7 +107,7 @@ PerCpuInterruptInit(uint32_t __CpuNumber__, uint64_t __StackTop__)
     __asm__ volatile("sidt %0" : "=m"(VerifyIdt)); /* Store current IDT pointer */
     __asm__ volatile("str %0" : "=r"(VerifyTr));   /* Store current TR value */
 
-    PDebug("CPU %u: Verification:\n", __CpuNumber__);
+    PDebug("CPU %u: Verification for Tables:\n", __CpuNumber__);
     PDebug("  GDT: Expected=0x%llx, Actual=0x%llx\n", CpuData->GdtPtr.Base, VerifyGdt.Base);
     PDebug("  IDT: Expected=0x%llx, Actual=0x%llx\n", CpuData->IdtPtr.Base, VerifyIdt.Base);
     PDebug("  TSS: Expected=0x%x, Actual=0x%x\n", TssSelector, VerifyTr);
@@ -127,7 +127,7 @@ PerCpuInterruptInit(uint32_t __CpuNumber__, uint64_t __StackTop__)
         PError("CPU %u: TSS verification failed!\n", __CpuNumber__);
     }
 
-    PSuccess("CPU %u: Per-CPU interrupt handling initialized\n", __CpuNumber__);
+    PSuccess("CPU %u: Per-CPU interrupt handling active\n", __CpuNumber__);
 }
 
 PerCpuData*

@@ -1,15 +1,14 @@
+#include <Errnos.h>
 #include <PMM.h>
 
 void
-ParseMemoryMap(void)
+ParseMemoryMap(SysErr* __Err__)
 {
     if (!MemmapRequest.response)
     {
-        PError("Failed to get memory map from Limine\n");
+        SlotError(__Err__, -NoOperations);
         return;
     }
-
-    PInfo("Parsing memory map (%lu entries)...\n", MemmapRequest.response->entry_count);
 
     Pmm.RegionCount      = 0;
     uint64_t HighestAddr = 0;
@@ -21,7 +20,6 @@ ParseMemoryMap(void)
 
         if (Pmm.RegionCount >= MaxMemoryRegions)
         {
-            PWarn("Too many memory regions, truncating at %u\n", MaxMemoryRegions);
             break;
         }
 
@@ -66,17 +64,14 @@ ParseMemoryMap(void)
 }
 
 void
-MarkMemoryRegions(void)
+MarkMemoryRegions(SysErr* __Err__)
 {
-    PInfo("Marking memory regions...\n");
-
-    /*Start with all pages marked as used (safe default)*/
+    /*default to all used*/
     for (uint64_t Index = 0; Index < Pmm.TotalPages; Index++)
     {
-        SetBitmapBit(Index);
+        SetBitmapBit(Index, __Err__);
     }
 
-    /*Mark usable regions as available for allocation*/
     uint64_t TotalFreePages = 0;
     for (uint32_t RegionIndex = 0; RegionIndex < Pmm.RegionCount; RegionIndex++)
     {
@@ -90,7 +85,7 @@ MarkMemoryRegions(void)
             {
                 if (Page < Pmm.TotalPages)
                 {
-                    ClearBitmapBit(Page);
+                    ClearBitmapBit(Page, __Err__);
                 }
             }
 
@@ -99,14 +94,13 @@ MarkMemoryRegions(void)
         }
     }
 
-    /*Protect the bitmap itself from allocation*/
     uint64_t BitmapPhys      = VirtToPhys(Pmm.Bitmap);
     uint64_t BitmapStartPage = BitmapPhys / PageSize;
     uint64_t BitmapPageCount = (Pmm.BitmapSize * sizeof(uint64_t) + PageSize - 1) / PageSize;
 
     for (uint64_t Page = BitmapStartPage; Page < BitmapStartPage + BitmapPageCount; Page++)
     {
-        SetBitmapBit(Page);
+        SetBitmapBit(Page, __Err__);
     }
 
     PInfo("Protected %lu bitmap pages from allocation\n", BitmapPageCount);

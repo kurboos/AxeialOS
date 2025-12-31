@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KExports.h>
 
 typedef struct
@@ -12,9 +13,9 @@ typedef struct
 
 } SpinLock;
 
-void InitializeSpinLock(SpinLock* __Lock__, const char* __Name__);
-void AcquireSpinLock(SpinLock* __Lock__);
-void ReleaseSpinLock(SpinLock* __Lock__);
+void InitializeSpinLock(SpinLock* __Lock__, const char* __Name__, SysErr* __Err__ _unused);
+void AcquireSpinLock(SpinLock* __Lock__, SysErr* __Err__ _unused);
+void ReleaseSpinLock(SpinLock* __Lock__, SysErr* __Err__ _unused);
 bool TryAcquireSpinLock(SpinLock* __Lock__);
 
 typedef struct
@@ -25,9 +26,9 @@ typedef struct
     const char*       Name;
 } Mutex;
 
-void InitializeMutex(Mutex* __Mutex__, const char* __Name__);
-void AcquireMutex(Mutex* __Mutex__);
-void ReleaseMutex(Mutex* __Mutex__);
+void InitializeMutex(Mutex* __Mutex__, const char* __Name__, SysErr* __Err__);
+void AcquireMutex(Mutex* __Mutex__, SysErr* __Err__);
+void ReleaseMutex(Mutex* __Mutex__, SysErr* __Err__);
 bool TryAcquireMutex(Mutex* __Mutex__);
 
 typedef struct
@@ -38,9 +39,12 @@ typedef struct
     const char*       Name;
 } Semaphore;
 
-void InitializeSemaphore(Semaphore* __Semaphore__, int32_t __InitialCount__, const char* __Name__);
-void AcquireSemaphore(Semaphore* __Semaphore__);
-void ReleaseSemaphore(Semaphore* __Semaphore__);
+void InitializeSemaphore(Semaphore*  __Semaphore__,
+                         int32_t     __InitialCount__,
+                         const char* __Name__,
+                         SysErr*     __Err__);
+void AcquireSemaphore(Semaphore* __Semaphore__, SysErr* __Err__ _unused);
+void ReleaseSemaphore(Semaphore* __Semaphore__, SysErr* __Err__ _unused);
 bool TryAcquireSemaphore(Semaphore* __Semaphore__);
 
 extern SpinLock ConsoleLock;

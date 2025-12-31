@@ -1,7 +1,9 @@
 #pragma once
 
 #include <AxeThreads.h>
+#include <Errnos.h>
 #include <IDT.h>
+#include <Sync.h>
 
 typedef struct
 {
@@ -26,22 +28,24 @@ typedef struct
 
 extern CpuScheduler CpuSchedulers[MaxCPUs];
 
-void     InitializeScheduler(void);
-void     InitializeCpuScheduler(uint32_t __CpuId__);
-void     Schedule(uint32_t __CpuId__, InterruptFrame* __Frame__);
-Thread*  GetNextThread(uint32_t __CpuId__);
-void     AddThreadToReadyQueue(uint32_t __CpuId__, Thread* __ThreadPtr__);
-Thread*  RemoveThreadFromReadyQueue(uint32_t __CpuId__);
-void     AddThreadToWaitingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__);
-void     AddThreadToZombieQueue(uint32_t __CpuId__, Thread* __ThreadPtr__);
-void     AddThreadToSleepingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__);
-void     SaveInterruptFrameToThread(Thread* __ThreadPtr__, InterruptFrame* __Frame__);
-void     LoadThreadContextToInterruptFrame(Thread* __ThreadPtr__, InterruptFrame* __Frame__);
+void    InitializeScheduler(SysErr* __Err__);
+void    InitializeCpuScheduler(uint32_t __CpuId__, SysErr* __Err__);
+void    Schedule(uint32_t __CpuId__, InterruptFrame* __Frame__, SysErr* __Err__);
+Thread* GetNextThread(uint32_t __CpuId__);
+void    AddThreadToReadyQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__);
+Thread* RemoveThreadFromReadyQueue(uint32_t __CpuId__);
+void    AddThreadToWaitingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__);
+void    AddThreadToZombieQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__);
+void    AddThreadToSleepingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__);
+void SaveInterruptFrameToThread(Thread* __ThreadPtr__, InterruptFrame* __Frame__, SysErr* __Err__);
+void LoadThreadContextToInterruptFrame(Thread*         __ThreadPtr__,
+                                       InterruptFrame* __Frame__,
+                                       SysErr*         __Err__);
 uint32_t GetCpuThreadCount(uint32_t __CpuId__);
 uint32_t GetCpuReadyCount(uint32_t __CpuId__);
 uint64_t GetCpuContextSwitches(uint32_t __CpuId__);
 uint32_t GetCpuLoadAverage(uint32_t __CpuId__);
-void     WakeupSleepingThreads(uint32_t __CpuId__);
-void     CleanupZombieThreads(uint32_t __CpuId__);
-void     DumpCpuSchedulerInfo(uint32_t __CpuId__);
-void     DumpAllSchedulers(void);
+void     WakeupSleepingThreads(uint32_t __CpuId__, SysErr* __Err__);
+void     CleanupZombieThreads(uint32_t __CpuId__, SysErr* __Err__);
+void     DumpCpuSchedulerInfo(uint32_t __CpuId__, SysErr* __Err__);
+void     DumpAllSchedulers(SysErr* __Err__);

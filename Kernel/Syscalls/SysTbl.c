@@ -4,7 +4,6 @@
 #include <AxeThreads.h>
 #include <BootConsole.h>
 #include <BootImg.h>
-#include <CharBus.h>
 #include <DevFS.h>
 #include <EarlyBootFB.h>
 #include <GDT.h>
@@ -51,7 +50,7 @@ __Handle__Read(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixRead(Proc->Fds, (int)__Fd__, (void*)__Buf__, (long)__Len__);
 }
@@ -67,7 +66,7 @@ __Handle__Write(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixWrite(Proc->Fds, (int)__Fd__, (const void*)__Buf__, (long)__Len__);
 }
@@ -83,7 +82,7 @@ __Handle__Writev(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds || !__IovPtr__ || __IovCnt__ <= 0)
     {
-        return -1;
+        return -BadSystemcall;
     }
 
     Iovec* Iov   = (Iovec*)__IovPtr__;
@@ -101,7 +100,7 @@ __Handle__Writev(uint64_t __Fd__,
         long W = PosixWrite(Proc->Fds, (int)__Fd__, Buf, Len);
         if (W < 0)
         {
-            return (Total > 0) ? Total : -1;
+            return (Total > 0) ? Total : -BadSystemcall;
         }
         Total += W;
         if (W < Len)
@@ -123,7 +122,7 @@ __Handle__Readv(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds || !__IovPtr__ || __IovCnt__ <= 0)
     {
-        return -1;
+        return -BadSystemcall;
     }
 
     Iovec* Iov   = (Iovec*)__IovPtr__;
@@ -141,7 +140,7 @@ __Handle__Readv(uint64_t __Fd__,
         long R = PosixRead(Proc->Fds, (int)__Fd__, Buf, Len);
         if (R < 0)
         {
-            return (Total > 0) ? Total : -1;
+            return (Total > 0) ? Total : -BadSystemcall;
         }
         Total += R;
         if (R < Len)
@@ -163,7 +162,7 @@ __Handle__Open(uint64_t __Path__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixOpen(Proc->Fds, (const char*)__Path__, (long)__Flags__, (long)__Mode__);
 }
@@ -179,7 +178,7 @@ __Handle__Close(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixClose(Proc->Fds, (int)__Fd__);
 }
@@ -206,7 +205,7 @@ __Handle__Fstat(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixFstat(Proc->Fds, (int)__Fd__, (VfsStat*)__OutStat__);
 }
@@ -222,7 +221,7 @@ __Handle__Lseek(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixLseek(Proc->Fds, (int)__Fd__, (long)__Off__, (int)__Whence__);
 }
@@ -238,7 +237,7 @@ __Handle__Ioctl(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixIoctl(Proc->Fds, (int)__Fd__, (unsigned long)__Cmd__, (void*)__Arg__);
 }
@@ -272,9 +271,9 @@ __Handle__Pipe(uint64_t __PipefdPtr__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds || !__PipefdPtr__)
     {
-        return -1;
+        return -BadSystemcall;
     }
-    int fds[2] = {-1, -1};
+    int fds[2] = {-BadSystemcall, -BadSystemcall};
     int r      = PosixPipe(Proc->Fds, fds);
     if (r == 0)
     {
@@ -295,7 +294,7 @@ __Handle__Dup(uint64_t __Fd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixDup(Proc->Fds, (int)__Fd__);
 }
@@ -311,7 +310,7 @@ __Handle__Dup2(uint64_t __OldFd__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixDup2(Proc->Fds, (int)__OldFd__, (int)__NewFd__);
 }
@@ -368,8 +367,10 @@ __Handle__SchedYield(uint64_t __U1__,
                      uint64_t __U5__,
                      uint64_t __U6__)
 {
-    ThreadYield();
-    return 0;
+    SysErr  err;
+    SysErr* Error = &err;
+    ThreadYield(Error);
+    return SysOkay;
 }
 
 int64_t
@@ -383,7 +384,7 @@ __Handle__Nanosleep(uint64_t __ReqPtr__,
     __attribute_unused__ uint64_t __unused_rem__ = __RemPtr__;
     if (!__ReqPtr__)
     {
-        return -1;
+        return -BadSystemcall;
     }
     struct
     {
@@ -391,8 +392,10 @@ __Handle__Nanosleep(uint64_t __ReqPtr__,
         long Nsec;
     }*       ts = (void*)__ReqPtr__;
     uint64_t ms = (ts->Sec * 1000ULL) + (ts->Nsec / 1000000ULL);
-    Sleep((uint32_t)ms);
-    return 0;
+    SysErr   err;
+    SysErr*  Error = &err;
+    Sleep((uint32_t)ms, Error);
+    return SysOkay;
 }
 
 int64_t
@@ -404,7 +407,7 @@ __Handle__Getpid(uint64_t __U1__,
                  uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    return Proc ? (int64_t)Proc->Pid : -1;
+    return Proc ? (int64_t)Proc->Pid : -BadSystemcall;
 }
 
 int64_t
@@ -416,7 +419,7 @@ __Handle__Getppid(uint64_t __U1__,
                   uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    return Proc ? (int64_t)Proc->Ppid : -1;
+    return Proc ? (int64_t)Proc->Ppid : -BadSystemcall;
 }
 
 int64_t
@@ -429,7 +432,7 @@ __Handle__Gettid(uint64_t __U1__,
 {
     uint32_t CpuId = GetCurrentCpuId();
     Thread*  Thrd  = GetCurrentThread(CpuId);
-    return Thrd ? (int64_t)Thrd->ThreadId : -1;
+    return Thrd ? (int64_t)Thrd->ThreadId : -BadSystemcall;
 }
 
 int64_t
@@ -443,7 +446,7 @@ __Handle__Fork(uint64_t __U1__,
     PosixProc* Parent = __GetCurrentProc__();
     if (!Parent)
     {
-        return -1;
+        return -BadSystemcall;
     }
     PosixProc* Child = NULL;
     long       pid   = PosixFork(Parent, &Child);
@@ -461,7 +464,7 @@ __Handle__Execve(uint64_t __Path__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixProcExecve(
         Proc, (const char*)__Path__, (const char* const*)__Argv__, (const char* const*)__Envp__);
@@ -478,10 +481,10 @@ __Handle__Exit(uint64_t __Status__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc)
     {
-        return -1;
+        return -BadSystemcall;
     }
     PosixExit(Proc, (int)__Status__);
-    return 0;
+    return SysOkay;
 }
 
 int64_t
@@ -495,7 +498,7 @@ __Handle__Wait4(uint64_t __Pid__,
     PosixProc* Parent = __GetCurrentProc__();
     if (!Parent)
     {
-        return -1;
+        return -BadSystemcall;
     }
     int         status = 0;
     PosixRusage ru     = {0};
@@ -540,9 +543,9 @@ __Handle__Getcwd(uint64_t __Buf__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !__Buf__ || __Len__ == 0)
     {
-        return -1;
+        return -BadSystemcall;
     }
-    StringCopy((char*)__Buf__, Proc->Cwd, (uint32_t)__Len__);
+    strcpy((char*)__Buf__, Proc->Cwd, (uint32_t)__Len__);
     return (int64_t)StringLength((const char*)__Buf__);
 }
 
@@ -557,7 +560,7 @@ __Handle__Chdir(uint64_t __Path__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc)
     {
-        return -1;
+        return -BadSystemcall;
     }
     return PosixChdir(Proc, (const char*)__Path__);
 }
@@ -572,7 +575,7 @@ __Handle__Uname(uint64_t __Buf__,
 {
     if (!__Buf__)
     {
-        return -1;
+        return -BadSystemcall;
     }
     /* sysname,nodename,release,version,machine */
     struct Uts
@@ -580,12 +583,12 @@ __Handle__Uname(uint64_t __Buf__,
         char Sys[65], Node[65], Rel[65], Ver[65], Mach[65];
     };
     struct Uts* u = (struct Uts*)__Buf__;
-    StringCopy(u->Sys, "AxeialOS", 64);
-    StringCopy(u->Node, "Oil Up", 64);
-    StringCopy(u->Rel, "0.0000000000000001", 64);
-    StringCopy(u->Ver, "Idk", 64);
-    StringCopy(u->Mach, "x86_64/AMD64", 64);
-    return 0;
+    strcpy(u->Sys, "AxeialOS", 64);
+    strcpy(u->Node, "Oil Up", 64);
+    strcpy(u->Rel, "0.0000000000000001", 64);
+    strcpy(u->Ver, "Idk", 64);
+    strcpy(u->Mach, "x86_64/AMD64", 64);
+    return SysOkay;
 }
 
 int64_t
@@ -599,7 +602,7 @@ __Handle__Gettimeofday(uint64_t __Tv__,
     __attribute_unused__ uint64_t __unused_tz__ = __Tz__;
     if (!__Tv__)
     {
-        return -1;
+        return -BadSystemcall;
     }
     struct
     {
@@ -609,7 +612,7 @@ __Handle__Gettimeofday(uint64_t __Tv__,
     uint64_t ticks = GetSystemTicks();
     tv->Sec        = (long)(ticks / 1000ULL);
     tv->Usec       = (long)((ticks % 1000ULL) * 1000ULL);
-    return 0;
+    return SysOkay;
 }
 
 int64_t
@@ -622,12 +625,12 @@ __Handle__Times(uint64_t __TmsPtr__,
 {
     if (!__TmsPtr__)
     {
-        return -1;
+        return -BadSystemcall;
     }
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc)
     {
-        return -1;
+        return -BadSystemcall;
     }
     struct
     {
@@ -640,7 +643,7 @@ __Handle__Times(uint64_t __TmsPtr__,
     tms->Stime  = (long)(Proc->Times.SysUsec / 10000ULL);
     tms->Cutime = 0;
     tms->Cstime = 0;
-    return 0;
+    return SysOkay;
 }
 
 int64_t
@@ -653,7 +656,7 @@ __Handle__ClockGettime(uint64_t __ClkId__,
 {
     if (!__Tp__)
     {
-        return -1;
+        return -BadSystemcall;
     }
     struct
     {
@@ -663,7 +666,7 @@ __Handle__ClockGettime(uint64_t __ClkId__,
     uint64_t ticks = GetSystemTicks();
     tp->Sec        = (long)(ticks / 1000ULL);
     tp->Nsec       = (long)((ticks % 1000ULL) * 1000000ULL);
-    return 0;
+    return SysOkay;
 }
 
 static inline uint64_t
@@ -718,7 +721,7 @@ __Handle__Mmap(uint64_t __Addr__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Space || __Len__ == 0)
     {
-        return -1;
+        return -BadSystemcall;
     }
 
     uint64_t VaBase = (__Addr__ == 0) ? __AlignUp__(UserVirtualBase + 0x01000000ULL, PageSize)
@@ -744,7 +747,7 @@ __Handle__Mmap(uint64_t __Addr__,
         PError("mmap: VirtMapRangeZeroed failed base=0x%llx len=0x%llx\n",
                (unsigned long long)VaBase,
                (unsigned long long)MapLen);
-        return -1;
+        return -BadSystemcall;
     }
 
     return (int64_t)VaBase;
@@ -766,7 +769,7 @@ __Handle__Munmap(uint64_t __Addr__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Space || __Addr__ == 0 || __Len__ == 0)
     {
-        return -1;
+        return -BadSystemcall;
     }
 
     uint64_t Va  = __AlignDown__(__Addr__, PageSize);
@@ -776,8 +779,10 @@ __Handle__Munmap(uint64_t __Addr__,
     {
         (void)UnmapPage(Proc->Space, Va);
     }
-    FlushAllTlb();
-    return 0;
+    SysErr  err;
+    SysErr* Error = &err;
+    FlushAllTlb(Error);
+    return SysOkay;
 }
 
 int64_t
@@ -797,13 +802,13 @@ __Handle__Brk(uint64_t __NewBrk__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Space)
     {
-        return -1;
+        return -BadSystemcall;
     }
 
     ProcBrkRec* Br = __BrkLookup__(Proc->Pid);
     if (!Br)
     {
-        return -1;
+        return -BadSystemcall;
     }
 
     if (Br->BrkBase == 0)
@@ -829,7 +834,7 @@ __Handle__Brk(uint64_t __NewBrk__,
         int      RIdx     = VirtMapRangeZeroed(Proc->Space, Br->BrkCur, GrowLen, PteFlags);
         if (RIdx != 0)
         {
-            return -1;
+            return -BadSystemcall;
         }
         Br->BrkCur = Want;
         return (int64_t)Br->BrkCur;
@@ -841,7 +846,9 @@ __Handle__Brk(uint64_t __NewBrk__,
         {
             (void)UnmapPage(Proc->Space, Va);
         }
-        FlushAllTlb();
+        SysErr  err;
+        SysErr* Error = &err;
+        FlushAllTlb(Error);
         Br->BrkCur = Want;
         return (int64_t)Br->BrkCur;
     }
@@ -863,16 +870,16 @@ __FdIsReadable__(PosixFdTable* __Tab__, int __Fd__)
 {
     if (!__Tab__)
     {
-        return 0;
+        return SysOkay;
     }
     if (__Fd__ < 0 || (long)__Fd__ >= __Tab__->Cap)
     {
-        return 0;
+        return SysOkay;
     }
     PosixFd* E = &__Tab__->Entries[__Fd__];
     if (E->Fd < 0)
     {
-        return 0;
+        return SysOkay;
     }
     if (E->IsFile)
     {
@@ -881,12 +888,14 @@ __FdIsReadable__(PosixFdTable* __Tab__, int __Fd__)
     if (E->IsChar && E->Obj)
     {
         PosixPipeT* P = (PosixPipeT*)E->Obj;
-        AcquireSpinLock(&P->Lock);
+        SysErr      err;
+        SysErr*     Error = &err;
+        AcquireSpinLock(&P->Lock, Error);
         int Ok = (P->Len > 0);
-        ReleaseSpinLock(&P->Lock);
+        ReleaseSpinLock(&P->Lock, Error);
         return Ok;
     }
-    return 0;
+    return SysOkay;
 }
 
 static int
@@ -894,16 +903,16 @@ __FdIsWritable__(PosixFdTable* __Tab__, int __Fd__)
 {
     if (!__Tab__)
     {
-        return 0;
+        return SysOkay;
     }
     if (__Fd__ < 0 || (long)__Fd__ >= __Tab__->Cap)
     {
-        return 0;
+        return SysOkay;
     }
     PosixFd* E = &__Tab__->Entries[__Fd__];
     if (E->Fd < 0)
     {
-        return 0;
+        return SysOkay;
     }
     if (E->IsFile)
     {
@@ -912,12 +921,14 @@ __FdIsWritable__(PosixFdTable* __Tab__, int __Fd__)
     if (E->IsChar && E->Obj)
     {
         PosixPipeT* P = (PosixPipeT*)E->Obj;
-        AcquireSpinLock(&P->Lock);
+        SysErr      err;
+        SysErr*     Error = &err;
+        AcquireSpinLock(&P->Lock, Error);
         int Ok = (P->Len < P->Cap);
-        ReleaseSpinLock(&P->Lock);
+        ReleaseSpinLock(&P->Lock, Error);
         return Ok;
     }
-    return 0;
+    return SysOkay;
 }
 
 static int
@@ -925,7 +936,7 @@ __FdsetTest__(const void* __Set__, int __Fd__)
 {
     if (!__Set__ || __Fd__ < 0)
     {
-        return 0;
+        return SysOkay;
     }
     const unsigned char* S = (const unsigned char*)__Set__;
     return (S[__Fd__ / 8] & (1u << (__Fd__ % 8))) ? 1 : 0;
@@ -966,7 +977,7 @@ __Handle__Select(uint64_t __Nfds__,
     PosixProc* Proc = __GetCurrentProc__();
     if (!Proc || !Proc->Fds)
     {
-        return -1;
+        return -BadSystemcall;
     }
 
     unsigned char* Rfds = (unsigned char*)__Readfds__;
@@ -988,8 +999,8 @@ __Handle__Select(uint64_t __Nfds__,
     {
         int WantR = Rfds && __FdsetTest__(Rfds, fd);
         int WantW = Wfds && __FdsetTest__(Wfds, fd);
-        int OkR   = WantR ? __FdIsReadable__(Proc->Fds, fd) : 0;
-        int OkW   = WantW ? __FdIsWritable__(Proc->Fds, fd) : 0;
+        int OkR   = WantR ? __FdIsReadable__(Proc->Fds, fd) : Nothing;
+        int OkW   = WantW ? __FdIsWritable__(Proc->Fds, fd) : Nothing;
 
         if (Rfds && WantR && !OkR)
         {
@@ -1025,15 +1036,17 @@ __Handle__Select(uint64_t __Nfds__,
             long Usec;
         }*       tv = (void*)__Timeout__;
         uint64_t ms = (tv->Sec * 1000ULL) + (tv->Usec / 1000ULL);
-        Sleep((uint32_t)ms);
+        SysErr   err;
+        SysErr*  Error = &err;
+        Sleep((uint32_t)ms, Error);
 
         Ready = 0;
         for (int fd = 0; fd < (int)__Nfds__; fd++)
         {
             int WantR = Rfds && __FdsetTest__(Rfds, fd);
             int WantW = Wfds && __FdsetTest__(Wfds, fd);
-            int OkR   = WantR ? __FdIsReadable__(Proc->Fds, fd) : 0;
-            int OkW   = WantW ? __FdIsWritable__(Proc->Fds, fd) : 0;
+            int OkR   = WantR ? __FdIsReadable__(Proc->Fds, fd) : Nothing;
+            int OkW   = WantW ? __FdIsWritable__(Proc->Fds, fd) : Nothing;
 
             if (Rfds && WantR && !OkR)
             {
@@ -1057,7 +1070,8 @@ __Handle__Select(uint64_t __Nfds__,
         }
         return Ready;
     }
-
-    ThreadYield();
-    return 0;
+    SysErr  err;
+    SysErr* Error = &err;
+    ThreadYield(Error);
+    return SysOkay;
 }

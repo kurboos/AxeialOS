@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 
 /*Section Header*/
 typedef struct
@@ -125,4 +126,4 @@ typedef struct ModImage
 
 int  InstallModule(const char* __Path__);
 int  UnInstallModule(const char* __Path__);
-void InitRamDiskDevDrvs(void);
+void InitRamDiskDevDrvs(SysErr* __Err__);

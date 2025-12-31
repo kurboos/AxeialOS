@@ -1,8 +1,9 @@
-#include <SMP.h>  /* Symmetric multiprocessing functions */
-#include <Sync.h> /* Synchronization primitives definitions */
+#include <Errnos.h>
+#include <SMP.h>
+#include <Sync.h>
 
 void
-InitializeMutex(Mutex* __Mutex__, const char* __Name__)
+InitializeMutex(Mutex* __Mutex__, const char* __Name__, SysErr* __Err__)
 {
     __Mutex__->Lock           = 0;          /* Initially unlocked */
     __Mutex__->Owner          = 0xFFFFFFFF; /* No owner (kernel value) */
@@ -11,13 +12,14 @@ InitializeMutex(Mutex* __Mutex__, const char* __Name__)
 }
 
 void
-AcquireMutex(Mutex* __Mutex__)
+AcquireMutex(Mutex* __Mutex__, SysErr* __Err__)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
     if (__Mutex__->Owner == CpuId)
     {
         __Mutex__->RecursionCount++;
+        SlotError(__Err__, -Recursion);
         return;
     }
 
@@ -39,12 +41,13 @@ AcquireMutex(Mutex* __Mutex__)
 }
 
 void
-ReleaseMutex(Mutex* __Mutex__)
+ReleaseMutex(Mutex* __Mutex__, SysErr* __Err__)
 {
     uint32_t CpuId = GetCurrentCpuId();
 
     if (__Mutex__->Owner != CpuId)
     {
+        SlotError(__Err__, -BadEntity);
         return;
     }
 

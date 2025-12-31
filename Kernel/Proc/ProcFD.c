@@ -31,7 +31,7 @@ __GetEntry__(PosixFdTable* __Tab__, int __Fd__)
 {
     if (!__IsValidFd__(__Tab__, __Fd__))
     {
-        return NULL;
+        return Error_TO_Pointer(-NotCanonical);
     }
     return &__Tab__->Entries[__Fd__];
 }
@@ -47,7 +47,7 @@ __FindFreeFd__(PosixFdTable* __Tab__, int __Start__)
             return (int)I;
         }
     }
-    return -1;
+    return -NoSuch;
 }
 
 static void
@@ -65,8 +65,10 @@ __InitEntry__(PosixFd* __E__)
 static long
 __PipeWrite__(PosixPipeT* __P__, const void* __Buf__, long __Len__)
 {
-    long W = 0;
-    AcquireSpinLock(&__P__->Lock);
+    long    W = 0;
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__P__->Lock, Error);
     while (W < __Len__ && __P__->Len < __P__->Cap)
     {
         __P__->Buf[__P__->Tail] = ((const char*)__Buf__)[W];
@@ -74,15 +76,17 @@ __PipeWrite__(PosixPipeT* __P__, const void* __Buf__, long __Len__)
         __P__->Len++;
         W++;
     }
-    ReleaseSpinLock(&__P__->Lock);
+    ReleaseSpinLock(&__P__->Lock, Error);
     return W;
 }
 
 static long
 __PipeRead__(PosixPipeT* __P__, void* __Buf__, long __Len__)
 {
-    long R = 0;
-    AcquireSpinLock(&__P__->Lock);
+    long    R = 0;
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__P__->Lock, Error);
     while (R < __Len__ && __P__->Len > 0)
     {
         ((char*)__Buf__)[R] = __P__->Buf[__P__->Head];
@@ -90,7 +94,7 @@ __PipeRead__(PosixPipeT* __P__, void* __Buf__, long __Len__)
         __P__->Len--;
         R++;
     }
-    ReleaseSpinLock(&__P__->Lock);
+    ReleaseSpinLock(&__P__->Lock, Error);
     return R;
 }
 
@@ -103,13 +107,15 @@ PosixFdInit(PosixFdTable* __Tab__, long __Cap__)
     __Tab__->StdinFd  = -1;
     __Tab__->StdoutFd = -1;
     __Tab__->StderrFd = -1;
-    InitializeSpinLock(&__Tab__->Lock, "PosixFdTable");
+    SysErr  err;
+    SysErr* Error = &err;
+    InitializeSpinLock(&__Tab__->Lock, "PosixFdTable", Error);
     long I = 0;
     for (I = 0; I < __Cap__; I++)
     {
         __InitEntry__(&__Tab__->Entries[I]);
     }
-    return 0;
+    return SysOkay;
 }
 
 int
@@ -117,22 +123,23 @@ PosixOpen(PosixFdTable* __Tab__, const char* __Path__, long __Flags__, long __Mo
 {
     if (!__Tab__ || !__Path__)
     {
-        return -1;
+        return -NotCanonical;
     }
-
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     int NewFd = __FindFreeFd__(__Tab__, 0);
     if (NewFd < 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -TooLess;
     }
 
     File* F = VfsOpen(__Path__, __Flags__);
     if (!F)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntity;
     }
 
     PosixFd* E = &__Tab__->Entries[NewFd];
@@ -144,19 +151,21 @@ PosixOpen(PosixFdTable* __Tab__, const char* __Path__, long __Flags__, long __Mo
     E->IsChar  = 0;
     E->IsBlock = 0;
     __Tab__->Count++;
-    ReleaseSpinLock(&__Tab__->Lock);
+    ReleaseSpinLock(&__Tab__->Lock, Error);
     return NewFd;
 }
 
 int
 PosixClose(PosixFdTable* __Tab__, int __Fd__)
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
     if (!E || E->Fd < 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
     if (--E->Refcnt <= 0)
     {
@@ -167,113 +176,109 @@ PosixClose(PosixFdTable* __Tab__, int __Fd__)
         if (E->IsChar && E->Obj)
         {
             PosixPipeT* P = (PosixPipeT*)E->Obj;
-            KFree(P->Buf);
-            KFree(P);
+            KFree(P->Buf, Error);
+            KFree(P, Error);
         }
         __InitEntry__(E);
         __Tab__->Count--;
     }
-    ReleaseSpinLock(&__Tab__->Lock);
-    return 0;
+    ReleaseSpinLock(&__Tab__->Lock, Error);
+    return SysOkay;
 }
 
 long
 PosixRead(PosixFdTable* __Tab__, int __Fd__, void* __Buf__, long __Len__)
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
     if (!E || E->Fd < 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
     if (E->IsFile)
     {
         long R = VfsRead((File*)E->Obj, __Buf__, __Len__);
-        ReleaseSpinLock(&__Tab__->Lock);
+        ReleaseSpinLock(&__Tab__->Lock, Error);
         return R;
     }
     if (E->IsChar)
     {
         long R = __PipeRead__((PosixPipeT*)E->Obj, __Buf__, __Len__);
-        ReleaseSpinLock(&__Tab__->Lock);
+        ReleaseSpinLock(&__Tab__->Lock, Error);
         return R;
     }
-    ReleaseSpinLock(&__Tab__->Lock);
-    return -1;
+    ReleaseSpinLock(&__Tab__->Lock, Error);
+    return -NoRead;
 }
 
 long
 PosixWrite(PosixFdTable* __Tab__, int __Fd__, const void* __Buf__, long __Len__)
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
     if (!E || E->Fd < 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        PError("PosixWrite: bad fd=%d\n", __Fd__);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
-
-    PDebug("PosixWrite: fd=%d IsFile=%d IsChar=%d IsBlock=%d\n",
-           __Fd__,
-           E->IsFile,
-           E->IsChar,
-           E->IsBlock);
 
     if (E->IsFile)
     {
-        PDebug("PosixWrite: dispatching to VfsWrite, len=%ld\n", __Len__);
         long W = VfsWrite((File*)E->Obj, __Buf__, __Len__);
-        PDebug("PosixWrite: VfsWrite returned %ld\n", W);
-        ReleaseSpinLock(&__Tab__->Lock);
+        ReleaseSpinLock(&__Tab__->Lock, Error);
         return W;
     }
 
     if (E->IsChar)
     {
-        PDebug("PosixWrite: dispatching to __PipeWrite__, len=%ld\n", __Len__);
         long W = __PipeWrite__((PosixPipeT*)E->Obj, __Buf__, __Len__);
-        PDebug("PosixWrite: __PipeWrite__ returned %ld\n", W);
-        ReleaseSpinLock(&__Tab__->Lock);
+        ReleaseSpinLock(&__Tab__->Lock, Error);
         return W;
     }
 
-    ReleaseSpinLock(&__Tab__->Lock);
-    PError("PosixWrite: fd=%d not file/char, returning -1\n", __Fd__);
-    return -1;
+    ReleaseSpinLock(&__Tab__->Lock, Error);
+    return -NoWrite;
 }
 
 long
 PosixLseek(PosixFdTable* __Tab__, int __Fd__, long __Off__, int __Wh__)
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
     if (!E || E->Fd < 0 || !E->IsFile)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
     long R = VfsLseek((File*)E->Obj, __Off__, __Wh__);
-    ReleaseSpinLock(&__Tab__->Lock);
+    ReleaseSpinLock(&__Tab__->Lock, Error);
     return R;
 }
 
 int
 PosixDup(PosixFdTable* __Tab__, int __Fd__)
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
     if (!E || E->Fd < 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
     int NewFd = __FindFreeFd__(__Tab__, 0);
     if (NewFd < 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -TooLess;
     }
     PosixFd* N = &__Tab__->Entries[NewFd];
     *N         = *E;
@@ -284,33 +289,35 @@ PosixDup(PosixFdTable* __Tab__, int __Fd__)
         ((File*)N->Obj)->Refcnt++;
     }
     __Tab__->Count++;
-    ReleaseSpinLock(&__Tab__->Lock);
+    ReleaseSpinLock(&__Tab__->Lock, Error);
     return NewFd;
 }
 
 int
 PosixDup2(PosixFdTable* __Tab__, int __OldFd__, int __NewFd__)
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __OldFd__);
     if (!E || E->Fd < 0 || !__IsValidFd__(__Tab__, __NewFd__))
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
     if (__OldFd__ == __NewFd__)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
+        ReleaseSpinLock(&__Tab__->Lock, Error);
         return __NewFd__;
     }
     PosixFd* D = &__Tab__->Entries[__NewFd__];
     if (D->Fd >= 0)
     {
         int rc = PosixClose(__Tab__, __NewFd__);
-        if (rc != 0)
+        if (rc != SysOkay)
         {
-            ReleaseSpinLock(&__Tab__->Lock);
-            return -1;
+            ReleaseSpinLock(&__Tab__->Lock, Error);
+            return -ErrReturn;
         }
     }
     *D    = *E;
@@ -321,20 +328,22 @@ PosixDup2(PosixFdTable* __Tab__, int __OldFd__, int __NewFd__)
         ((File*)D->Obj)->Refcnt++;
     }
     __Tab__->Count++;
-    ReleaseSpinLock(&__Tab__->Lock);
+    ReleaseSpinLock(&__Tab__->Lock, Error);
     return __NewFd__;
 }
 
 int
 PosixPipe(PosixFdTable* __Tab__, int __Pipefd__[2])
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     int Rd = __FindFreeFd__(__Tab__, 0);
     int Wr = __FindFreeFd__(__Tab__, Rd + 1);
     if (Rd < 0 || Wr < 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -NoOperations;
     }
     PosixPipeT* P = (PosixPipeT*)KMalloc(sizeof(PosixPipeT));
     P->Cap        = 4096;
@@ -342,7 +351,7 @@ PosixPipe(PosixFdTable* __Tab__, int __Pipefd__[2])
     P->Head       = 0;
     P->Tail       = 0;
     P->Len        = 0;
-    InitializeSpinLock(&P->Lock, "PosixPipeT");
+    InitializeSpinLock(&P->Lock, "PosixPipeT", Error);
 
     PosixFd* ER = &__Tab__->Entries[Rd];
     PosixFd* EW = &__Tab__->Entries[Wr];
@@ -368,23 +377,25 @@ PosixPipe(PosixFdTable* __Tab__, int __Pipefd__[2])
     __Tab__->Count += 2;
     __Pipefd__[0] = Rd;
     __Pipefd__[1] = Wr;
-    ReleaseSpinLock(&__Tab__->Lock);
-    return 0;
+    ReleaseSpinLock(&__Tab__->Lock, Error);
+    return SysOkay;
 }
 
 int
 PosixFcntl(PosixFdTable* __Tab__, int __Fd__, int __Cmd__, long __Arg__ __attribute__((unused)))
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
     if (!E || E->Fd < 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
     if (__Cmd__ == 0)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
+        ReleaseSpinLock(&__Tab__->Lock, Error);
         return E->Flags;
     }
     if (__Cmd__ == 1)
@@ -392,8 +403,8 @@ PosixFcntl(PosixFdTable* __Tab__, int __Fd__, int __Cmd__, long __Arg__ __attrib
         int NewFd = __FindFreeFd__(__Tab__, 0);
         if (NewFd < 0)
         {
-            ReleaseSpinLock(&__Tab__->Lock);
-            return -1;
+            ReleaseSpinLock(&__Tab__->Lock, Error);
+            return -TooLess;
         }
         PosixFd* N = &__Tab__->Entries[NewFd];
         *N         = *E;
@@ -404,25 +415,27 @@ PosixFcntl(PosixFdTable* __Tab__, int __Fd__, int __Cmd__, long __Arg__ __attrib
             ((File*)N->Obj)->Refcnt++;
         }
         __Tab__->Count++;
-        ReleaseSpinLock(&__Tab__->Lock);
+        ReleaseSpinLock(&__Tab__->Lock, Error);
         return NewFd;
     }
-    ReleaseSpinLock(&__Tab__->Lock);
-    return -1;
+    ReleaseSpinLock(&__Tab__->Lock, Error);
+    return -NotCanonical;
 }
 
 int
 PosixIoctl(PosixFdTable* __Tab__, int __Fd__, unsigned long __Cmd__, void* __Arg__)
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
     if (!E || E->Fd < 0 || !E->IsFile)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
     int R = VfsIoctl((File*)E->Obj, __Cmd__, __Arg__);
-    ReleaseSpinLock(&__Tab__->Lock);
+    ReleaseSpinLock(&__Tab__->Lock, Error);
     return R;
 }
 
@@ -441,15 +454,17 @@ PosixStatPath(const char* __Path__, VfsStat* __Out__)
 int
 PosixFstat(PosixFdTable* __Tab__, int __Fd__, VfsStat* __Out__)
 {
-    AcquireSpinLock(&__Tab__->Lock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
     if (!E || E->Fd < 0 || !E->IsFile)
     {
-        ReleaseSpinLock(&__Tab__->Lock);
-        return -1;
+        ReleaseSpinLock(&__Tab__->Lock, Error);
+        return -BadEntry;
     }
     int R = VfsFstats((File*)E->Obj, __Out__);
-    ReleaseSpinLock(&__Tab__->Lock);
+    ReleaseSpinLock(&__Tab__->Lock, Error);
     return R;
 }
 

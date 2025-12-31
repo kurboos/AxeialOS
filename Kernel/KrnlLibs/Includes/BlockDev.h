@@ -2,6 +2,7 @@
 
 #include <AllTypes.h>
 #include <DevFS.h>
+#include <Errnos.h>
 #include <KHeap.h>
 #include <KrnPrintf.h>
 #include <String.h>

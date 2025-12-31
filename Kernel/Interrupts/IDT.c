@@ -1,3 +1,4 @@
+#include <Errnos.h>
 #include <IDT.h>
 
 IdtEntry IdtEntries[256];
@@ -26,7 +27,8 @@ const char* ExceptionNames[32] = {"Division Error",
                                   "SIMD Floating-Point Exception"};
 
 void
-SetIdtEntry(int __Index__, uint64_t __Handler__, uint16_t __Selector__, uint8_t __Flags__)
+SetIdtEntry(
+    int __Index__, uint64_t __Handler__, uint16_t __Selector__, uint8_t __Flags__, SysErr* __Err__)
 {
     IdtEntries[__Index__].OffsetLow  = __Handler__ & 0xFFFF;
     IdtEntries[__Index__].Selector   = __Selector__;
@@ -38,7 +40,7 @@ SetIdtEntry(int __Index__, uint64_t __Handler__, uint16_t __Selector__, uint8_t 
 }
 
 void
-InitializePic(void)
+InitializePic(SysErr* __Err__)
 {
     /*ICW1: Initialize PIC - Send initialization command to start setup sequence*/
     __asm__ volatile("outb %0, %1" : : "a"((uint8_t)PicIcw1Init), "Nd"((uint16_t)PicMasterCommand));
@@ -72,10 +74,8 @@ InitializePic(void)
 }
 
 void
-InitializeIdt(void)
+InitializeIdt(SysErr* __Err__)
 {
-    PInfo("Initializing IDT ...\n");
-
     /*Set up IDT pointer with base address and limit*/
     IdtPtr.Limit = sizeof(IdtEntries) - 1;
     IdtPtr.Base  = (uint64_t)&IdtEntries;
@@ -83,7 +83,7 @@ InitializeIdt(void)
     /*Clear all IDT entries to prevent undefined behavior*/
     for (int Index = 0; Index < IdtMaxEntries; Index++)
     {
-        SetIdtEntry(Index, 0, 0, 0);
+        SetIdtEntry(Index, 0, 0, 0, __Err__);
     }
 
     /*Set up Interrupt Service Routines for CPU exceptions (vectors 0-19)*/
@@ -155,7 +155,7 @@ InitializeIdt(void)
                 break; // SIMD Floating-Point Exception
         }
         /*Configure IDT entry as interrupt gate with kernel code segment*/
-        SetIdtEntry(Index, HandlerAddr, KernelCodeSelector, IdtTypeInterruptGate);
+        SetIdtEntry(Index, HandlerAddr, KernelCodeSelector, IdtTypeInterruptGate, __Err__);
     }
 
     /*Set up Interrupt Request handlers for hardware interrupts (vectors 32-47)*/
@@ -179,12 +179,15 @@ InitializeIdt(void)
     /*Map each IRQ handler to its corresponding vector (32-47)*/
     for (int Index = 0; Index < 16; Index++)
     {
-        SetIdtEntry(
-            IdtIrqBase + Index, IrqHandlers[Index], KernelCodeSelector, IdtTypeInterruptGate);
+        SetIdtEntry(IdtIrqBase + Index,
+                    IrqHandlers[Index],
+                    KernelCodeSelector,
+                    IdtTypeInterruptGate,
+                    __Err__);
     }
 
     /*Initialize legacy PIC for compatibility (though we use APIC)*/
-    InitializePic();
+    InitializePic(__Err__);
 
     /*Load the IDT into the CPU's IDTR register*/
     __asm__ volatile("lidt %0" : : "m"(IdtPtr));
@@ -196,7 +199,7 @@ InitializeIdt(void)
 }
 
 void
-DumpMemory(uint64_t __Address__, int __Bytes__)
+DumpMemory(uint64_t __Address__, int __Bytes__, SysErr* __Err__)
 {
     KrnPrintf("Memory dump at 0x%lx:\n", __Address__);
     for (int Iteration = 0; Iteration < __Bytes__; Iteration += 16)
@@ -212,7 +215,7 @@ DumpMemory(uint64_t __Address__, int __Bytes__)
 }
 
 void
-DumpInstruction(uint64_t __Rip__)
+DumpInstruction(uint64_t __Rip__, SysErr* __Err__)
 {
     KrnPrintf("Instruction bytes at RIP (0x%lx):\n", __Rip__);
     uint8_t* instr = (uint8_t*)__Rip__;
@@ -225,7 +228,7 @@ DumpInstruction(uint64_t __Rip__)
 }
 
 void
-DumpControlRegisters(void)
+DumpControlRegisters(SysErr* __Err__)
 {
     uint64_t CR0, CR2, CR3, CR4;
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <ModELF.h>
 
 typedef struct ModuleRecord

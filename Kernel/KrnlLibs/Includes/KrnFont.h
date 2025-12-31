@@ -1,5 +1,6 @@
 #pragma once
 #include <AllTypes.h>
+#include <Errnos.h>
 
 /*8x16*/
 #define __F16

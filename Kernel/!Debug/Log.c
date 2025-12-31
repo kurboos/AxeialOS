@@ -1,4 +1,5 @@
 
+#include <Errnos.h>
 #include <KrnPrintf.h>
 
 void
@@ -8,7 +9,9 @@ PError(const char* __Format__, ...)
     {
         __Format__ = "(null)";
     }
-    AcquireSpinLock(&ConsoleLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ConsoleLock, Error);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
@@ -35,7 +38,7 @@ PError(const char* __Format__, ...)
 
     __builtin_va_end(args);
     SetBGColor(OldFG, OldBG);
-    ReleaseSpinLock(&ConsoleLock);
+    ReleaseSpinLock(&ConsoleLock, Error);
 }
 
 void
@@ -45,7 +48,9 @@ PWarn(const char* __Format__, ...)
     {
         __Format__ = "(null)";
     }
-    AcquireSpinLock(&ConsoleLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ConsoleLock, Error);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
@@ -72,7 +77,7 @@ PWarn(const char* __Format__, ...)
 
     __builtin_va_end(args);
     SetBGColor(OldFG, OldBG);
-    ReleaseSpinLock(&ConsoleLock);
+    ReleaseSpinLock(&ConsoleLock, Error);
 }
 
 void
@@ -82,7 +87,9 @@ PInfo(const char* __Format__, ...)
     {
         __Format__ = "(null)";
     }
-    AcquireSpinLock(&ConsoleLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ConsoleLock, Error);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
@@ -109,7 +116,7 @@ PInfo(const char* __Format__, ...)
 
     __builtin_va_end(args);
     SetBGColor(OldFG, OldBG);
-    ReleaseSpinLock(&ConsoleLock);
+    ReleaseSpinLock(&ConsoleLock, Error);
 }
 
 void
@@ -119,7 +126,9 @@ _PDebug(const char* __Format__, ...)
     {
         __Format__ = "(null)";
     }
-    AcquireSpinLock(&ConsoleLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ConsoleLock, Error);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
@@ -145,7 +154,7 @@ _PDebug(const char* __Format__, ...)
 
     __builtin_va_end(args);
     SetBGColor(OldFG, OldBG);
-    ReleaseSpinLock(&ConsoleLock);
+    ReleaseSpinLock(&ConsoleLock, Error);
 }
 
 void
@@ -155,7 +164,9 @@ PSuccess(const char* __Format__, ...)
     {
         __Format__ = "(null)";
     }
-    AcquireSpinLock(&ConsoleLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ConsoleLock, Error);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
@@ -182,5 +193,5 @@ PSuccess(const char* __Format__, ...)
 
     __builtin_va_end(args);
     SetBGColor(OldFG, OldBG);
-    ReleaseSpinLock(&ConsoleLock);
+    ReleaseSpinLock(&ConsoleLock, Error);
 }

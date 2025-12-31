@@ -3,7 +3,11 @@ EFIRoot        := $(BuildDirectory)/EFI
 ImgSysMirror   := .Build
 BootImg        := $(BuildDirectory)/BootImg.img
 
-SubMake := $(shell find . -name Makefile -not -path './Makefile')
+SubMake := $(shell find . -name Makefile \
+    -not -path './Makefile' \
+    -not -path './PCIBus/*' \
+	-not -path './ELFLoader/*' \
+	-not -path './Tty/*')
 
 .PHONY: all clean BootImg BuildModules
 

@@ -1,42 +1,42 @@
-#include <APICTimer.h>  /* APIC timer constants and functions */
-#include <AxeSchd.h>    /* Scheduler functions */
-#include <AxeThreads.h> /* Thread management functions */
-#include <HPETTimer.h>  /* HPET timer constants and functions */
-#include <PerCPUData.h> /* Per-CPU data structures */
-#include <SMP.h>        /* Symmetric multiprocessing functions */
-#include <SymAP.h>      /* Symmetric Application Processor definitions */
-#include <Timer.h>      /* Timer management structures and definitions */
-#include <VMM.h>        /* Virtual memory management (for timer mapping) */
+#include <APICTimer.h>
+#include <AxeSchd.h>
+#include <AxeThreads.h>
+#include <HPETTimer.h>
+#include <PerCPUData.h>
+#include <SMP.h>
+#include <SymAP.h>
+#include <Timer.h>
+#include <VMM.h>
 
 TimerManager Timer;
 
 volatile uint32_t TimerInterruptCount = 0;
 
 void
-InitializeTimer(void)
+InitializeTimer(SysErr* __Err__)
 {
     Timer.ActiveTimer      = TIMER_TYPE_NONE;
     Timer.SystemTicks      = 0;
     Timer.TimerInitialized = 0;
 
-    if (DetectApicTimer() && InitializeApicTimer())
+    if (DetectApicTimer() == SysOkay && InitializeApicTimer() == SysOkay)
     {
         /* APIC timer successfully initialized */
     }
 
-    else if (DetectHpetTimer() && InitializeHpetTimer())
+    else if (DetectHpetTimer() == SysOkay && InitializeHpetTimer() == SysOkay)
     {
         /* HPET timer successfully initialized */
     }
 
-    else if (InitializePitTimer())
+    else if (InitializePitTimer() == SysOkay)
     {
         /* PIT timer successfully initialized */
     }
 
     else
     {
-        PError("No timer available!\n");
+        SlotError(__Err__, -NotInit);
         return;
     }
 
@@ -51,7 +51,7 @@ InitializeTimer(void)
 }
 
 void
-TimerHandler(InterruptFrame* __Frame__)
+TimerHandler(InterruptFrame* __Frame__, SysErr* __Err__)
 {
     uint32_t    CpuId   = GetCurrentCpuId();
     PerCpuData* CpuData = GetPerCpuData(CpuId);
@@ -62,8 +62,8 @@ TimerHandler(InterruptFrame* __Frame__)
     __atomic_fetch_add(&TimerInterruptCount, 1, __ATOMIC_SEQ_CST);
     __atomic_fetch_add(&Timer.SystemTicks, 1, __ATOMIC_SEQ_CST);
 
-    WakeupSleepingThreads(CpuId);
-    Schedule(CpuId, __Frame__);
+    WakeupSleepingThreads(CpuId, __Err__);
+    Schedule(CpuId, __Frame__, __Err__);
 
     volatile uint32_t* EoiReg = (volatile uint32_t*)(CpuData->ApicBase + TimerApicRegEoi);
     *EoiReg                   = 0;
@@ -76,10 +76,11 @@ GetSystemTicks(void)
 }
 
 void
-Sleep(uint32_t __Milliseconds__)
+Sleep(uint32_t __Milliseconds__, SysErr* __Err__)
 {
     if (!Timer.TimerInitialized)
     {
+        SlotError(__Err__, -NotInit);
         return;
     }
 
@@ -88,7 +89,7 @@ Sleep(uint32_t __Milliseconds__)
 
     while (Timer.SystemTicks < EndTicks)
     {
-        __asm__ volatile("hlt"); /* Halt CPU to save power while waiting */
+        __asm__ volatile("hlt");
     }
 }
 

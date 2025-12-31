@@ -39,7 +39,7 @@ VirtMapRangeZeroed(VirtualMemorySpace* __Space__,
     uint64_t Phys  = AllocPages(Pages);
     if (!Phys)
     {
-        return -1;
+        return -NotCanonical;
     }
 
     uint64_t Va   = __VaStart__;
@@ -48,15 +48,15 @@ VirtMapRangeZeroed(VirtualMemorySpace* __Space__,
 
     for (I = 0; I < Pages; I++)
     {
-        if (MapPage(__Space__, Va, Pcur, __Flags__) != 1)
+        if (MapPage(__Space__, Va, Pcur, __Flags__) != SysOkay)
         {
-            return -1;
+            return -ErrReturn;
         }
         memset(PhysToVirt(Pcur), 0, PageSize);
         Va += PageSize;
         Pcur += PageSize;
     }
-    return 0;
+    return SysOkay;
 }
 
 static uint64_t
@@ -73,7 +73,7 @@ __PushStrings__(VirtualMemorySpace* __Space__,
 
     if (!__List__)
     {
-        return 0;
+        return Nothing;
     }
 
     while (__List__[Count] && Count < __Max__)
@@ -86,7 +86,7 @@ __PushStrings__(VirtualMemorySpace* __Space__,
     {
         long Len = (long)strlen(__List__[I]) + 1;
         Cur -= (uint64_t)Len;
-        __builtin_memcpy((void*)Cur, __List__[I], (size_t)Len);
+        memcpy((void*)Cur, __List__[I], (size_t)Len);
         __OutPtrs__[I] = Cur;
     }
 
@@ -99,15 +99,15 @@ __Write64__(VirtualMemorySpace* __Sp__, uint64_t __Va__, uint64_t __Val__)
     uint64_t __Pa__ = GetPhysicalAddress(__Sp__, __Va__);
     if (!__Pa__)
     {
-        return -1;
+        return -NotCanonical;
     }
     uint64_t* __Ka__ = (uint64_t*)PhysToVirt(__Pa__);
     if (!__Ka__)
     {
-        return -1;
+        return -NotCanonical;
     }
     *__Ka__ = __Val__;
-    return 0;
+    return SysOkay;
 }
 
 static inline int
@@ -115,7 +115,7 @@ __Push64__(VirtualMemorySpace* __Sp__, uint64_t* __Rsp__, uint64_t __LimitBase__
 {
     if ((*__Rsp__ - 8) < __LimitBase__)
     {
-        return -1;
+        return -NotCanonical;
     }
     *__Rsp__ -= 8;
     return __Write64__(__Sp__, *__Rsp__, __Val__);
@@ -136,10 +136,7 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
 {
     if (!__Space__ || __Space__->PhysicalBase == 0)
     {
-        PError("VirtSetupStack: bad space (ptr=%p pd=0x%llx)\n",
-               (void*)__Space__,
-               (unsigned long long)(__Space__ ? __Space__->PhysicalBase : 0ULL));
-        return 0;
+        return Nothing;
     }
 
     uint64_t __StackFlags__ = PTEPRESENT | PTEWRITABLE | PTEUSER;
@@ -148,17 +145,16 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
         __StackFlags__ |= PTENOEXECUTE;
     }
 
-    PDebug("VirtSetupStack: mapping stack base=0x%llx size=0x%llx flags=0x%llx nx=%d\n",
+    PDebug("Mapping stack base=0x%llx size=0x%llx flags=0x%llx nx=%d\n",
            (unsigned long long)__STACK_BASE__,
            (unsigned long long)__STACK_SIZE__,
            (unsigned long long)__StackFlags__,
            __Nx__);
 
     int m0 = VirtMapRangeZeroed(__Space__, __STACK_BASE__, __STACK_SIZE__, __StackFlags__);
-    if (m0 != 0)
+    if (m0 != SysOkay)
     {
-        PError("VirtSetupStack: map(stack) failed RIdx=%d\n", m0);
-        return 0;
+        return Nothing;
     }
     PDebug("VirtSetupStack: stack mapped OK\n");
 
@@ -168,25 +164,18 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
            (unsigned long long)__StackFlags__);
 
     int m1 = VirtMapRangeZeroed(__Space__, __ARG_AREA__, __STACK_SIZE__, __StackFlags__);
-    if (m1 != 0)
+    if (m1 != SysOkay)
     {
-        PError("VirtSetupStack: map(arg) failed RIdx=%d\n", m1);
-        return 0;
+        return Nothing;
     }
-    PDebug("VirtSetupStack: arg area mapped OK\n");
 
     uint64_t __ArgPtrs__[128] = {0};
     uint64_t __EnvPtrs__[128] = {0};
 
-    PDebug("VirtSetupStack: pushing argv strings into arg area\n");
     uint64_t __ArgCount__ =
         __PushStrings__(__Space__, __Argv__, __ARG_AREA__, __STACK_SIZE__, __ArgPtrs__, 128);
-    PDebug("VirtSetupStack: argv pushed: count=%llu\n", (unsigned long long)__ArgCount__);
-
-    PDebug("VirtSetupStack: pushing envp strings into arg area\n");
     uint64_t __EnvCount__ =
         __PushStrings__(__Space__, __Envp__, __ARG_AREA__, __STACK_SIZE__, __EnvPtrs__, 128);
-    PDebug("VirtSetupStack: envp pushed: count=%llu\n", (unsigned long long)__EnvCount__);
 
     enum
     {
@@ -202,38 +191,34 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
                                2 /*AT_NULL pair*/;
 
     uint64_t __Rsp__ = (__STACK_BASE__ + __STACK_SIZE__) & ~0xFULL;
-    PDebug("VirtSetupStack: initial RSP aligned=0x%llx (top=0x%llx)\n",
+    PDebug("Initial RSP aligned=0x%llx (top=0x%llx)\n",
            (unsigned long long)__Rsp__,
            (unsigned long long)(__STACK_BASE__ + __STACK_SIZE__));
 
     /* if parity requires it */
-    int __NeedShim__ = (((__TotalQwords__ & 1ULL) == 0) ? 1 : 0);
-    PDebug("VirtSetupStack: total_qwords=%llu parity=%s need_shim=%d\n",
+    int __NeedShim__ = (((__TotalQwords__ & 1ULL) == 0) ? true : false);
+    PDebug("total_qwords=%llu parity=%s need_shim=%d\n",
            (unsigned long long)__TotalQwords__,
            ((__TotalQwords__ & 1ULL) ? "odd" : "even"),
            __NeedShim__);
 
-    if (__NeedShim__)
+    if (__NeedShim__ == true)
     {
         int RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, 0);
-        if (RIdx != 0)
+        if (RIdx != SysOkay)
         {
-            PError("VirtSetupStack: push shim failed RIdx=%d RSP=0x%llx\n",
-                   RIdx,
-                   (unsigned long long)__Rsp__);
-            return 0;
+            return Nothing;
         }
-        PDebug("VirtSetupStack: shim pushed; RSP=0x%llx\n", (unsigned long long)__Rsp__);
+        PDebug("Shim pushed; RSP=0x%llx\n", (unsigned long long)__Rsp__);
     }
 
     /* argc */
     int RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, (uint64_t)__ArgCount__);
-    if (RIdx != 0)
+    if (RIdx != SysOkay)
     {
-        PError("VirtSetupStack: push argc failed RIdx=%d\n", RIdx);
-        return 0;
+        return Nothing;
     }
-    PDebug("VirtSetupStack: argc=%llu pushed; RSP=0x%llx\n",
+    PDebug("argc=%llu pushed; RSP=0x%llx\n",
            (unsigned long long)__ArgCount__,
            (unsigned long long)__Rsp__);
 
@@ -241,15 +226,11 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
     for (uint64_t I = 0; I < __ArgCount__; I++)
     {
         RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, __ArgPtrs__[I]);
-        if (RIdx != 0)
+        if (RIdx != SysOkay)
         {
-            PError("VirtSetupStack: push argv[%llu]=0x%llx failed RIdx=%d\n",
-                   (unsigned long long)I,
-                   (unsigned long long)__ArgPtrs__[I],
-                   RIdx);
-            return 0;
+            return Nothing;
         }
-        PDebug("VirtSetupStack: argv[%llu]=0x%llx pushed; RSP=0x%llx\n",
+        PDebug("argv[%llu]=0x%llx pushed; RSP=0x%llx\n",
                (unsigned long long)I,
                (unsigned long long)__ArgPtrs__[I],
                (unsigned long long)__Rsp__);
@@ -257,26 +238,20 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
 
     /* argv NULL */
     RIdx = __PushNull__(__Space__, &__Rsp__, __STACK_BASE__);
-    if (RIdx != 0)
+    if (RIdx != SysOkay)
     {
-        PError("VirtSetupStack: push argv NULL failed RIdx=%d\n", RIdx);
-        return 0;
+        return Nothing;
     }
-    PDebug("VirtSetupStack: argv NULL pushed; RSP=0x%llx\n", (unsigned long long)__Rsp__);
 
     /* envp[] (maybe zero) */
     for (uint64_t J = 0; J < __EnvCount__; J++)
     {
         RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, __EnvPtrs__[J]);
-        if (RIdx != 0)
+        if (RIdx != SysOkay)
         {
-            PError("VirtSetupStack: push envp[%llu]=0x%llx failed RIdx=%d\n",
-                   (unsigned long long)J,
-                   (unsigned long long)__EnvPtrs__[J],
-                   RIdx);
-            return 0;
+            return Nothing;
         }
-        PDebug("VirtSetupStack: envp[%llu]=0x%llx pushed; RSP=0x%llx\n",
+        PDebug("envp[%llu]=0x%llx pushed; RSP=0x%llx\n",
                (unsigned long long)J,
                (unsigned long long)__EnvPtrs__[J],
                (unsigned long long)__Rsp__);
@@ -284,89 +259,71 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
 
     /* envp NULL */
     RIdx = __PushNull__(__Space__, &__Rsp__, __STACK_BASE__);
-    if (RIdx != 0)
+    if (RIdx != SysOkay)
     {
-        PError("VirtSetupStack: push envp NULL failed RIdx=%d\n", RIdx);
-        return 0;
+        return Nothing;
     }
-    PDebug("VirtSetupStack: envp NULL pushed; RSP=0x%llx\n", (unsigned long long)__Rsp__);
 
     /* auxv: AT_PAGESZ, PageSize */
     RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, (uint64_t)AT_PAGESZ);
-    if (RIdx != 0)
+    if (RIdx != SysOkay)
     {
-        PError("VirtSetupStack: push AT_PAGESZ key failed RIdx=%d\n", RIdx);
         return 0;
     }
     RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, (uint64_t)PageSize);
-    if (RIdx != 0)
+    if (RIdx != SysOkay)
     {
-        PError("VirtSetupStack: push AT_PAGESZ val=%llu failed RIdx=%d\n",
-               (unsigned long long)PageSize,
-               RIdx);
         return 0;
     }
-    PDebug("VirtSetupStack: auxv AT_PAGESZ=%llu pushed; RSP=0x%llx\n",
+
+    PDebug("auxv AT_PAGESZ=%llu pushed; RSP=0x%llx\n",
            (unsigned long long)PageSize,
            (unsigned long long)__Rsp__);
 
     /* auxv: AT_EXECFN, argv[0] or 0 */
     RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, (uint64_t)AT_EXECFN);
-    if (RIdx != 0)
+    if (RIdx != SysOkay)
     {
-        PError("VirtSetupStack: push AT_EXECFN key failed RIdx=%d\n", RIdx);
-        return 0;
+        return Nothing;
     }
     {
         uint64_t __Execfn__ = (__ArgCount__ > 0) ? __ArgPtrs__[0] : 0;
         RIdx                = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, __Execfn__);
-        if (RIdx != 0)
+        if (RIdx != SysOkay)
         {
-            PError("VirtSetupStack: push AT_EXECFN val=0x%llx failed RIdx=%d\n",
-                   (unsigned long long)__Execfn__,
-                   RIdx);
             return 0;
         }
-        PDebug("VirtSetupStack: auxv AT_EXECFN=0x%llx pushed; RSP=0x%llx\n",
+        PDebug("auxv AT_EXECFN=0x%llx pushed; RSP=0x%llx\n",
                (unsigned long long)__Execfn__,
                (unsigned long long)__Rsp__);
     }
 
     /* auxv: AT_NULL terminator pair */
     RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, (uint64_t)AT_NULL);
-    if (RIdx != 0)
+    if (RIdx != SysOkay)
     {
-        PError("VirtSetupStack: push AT_NULL key failed RIdx=%d\n", RIdx);
-        return 0;
+        return Nothing;
     }
     RIdx = __Push64__(__Space__, &__Rsp__, __STACK_BASE__, 0);
-    if (RIdx != 0)
+    if (RIdx != SysOkay)
     {
-        PError("VirtSetupStack: push AT_NULL val failed RIdx=%d\n", RIdx);
-        return 0;
+        return Nothing;
     }
-    PDebug("VirtSetupStack: auxv AT_NULL pushed; RSP=0x%llx\n", (unsigned long long)__Rsp__);
 
     /* Assert ABI invariant: RSP % 16 == 8 at entry */
     uint64_t ModIdx = (__Rsp__ & 0xFULL);
     if (ModIdx != 8)
     {
-        PError("VirtSetupStack: ABI alignment fail (RSP%%16=0x%llx expected 0x8) RSP=0x%llx "
-               "total_qwords=%llu need_shim=%d\n",
-               (unsigned long long)ModIdx,
-               (unsigned long long)__Rsp__,
-               (unsigned long long)__TotalQwords__,
-               __NeedShim__);
-        return 0;
+        return Nothing;
     }
 
     if (__OutRsp__)
     {
         *__OutRsp__ = __Rsp__;
-        PDebug("VirtSetupStack: out RSP stored=0x%llx\n", (unsigned long long)__Rsp__);
+        PDebug("Out RSP stored=0x%llx\n", (unsigned long long)__Rsp__);
     }
 
-    PSuccess("VirtSetupStack: success argc=%llu envc=%llu total_qwords=%llu shim=%d RSP=0x%llx\n",
+    PSuccess("Success argc=%llu envc=%llu total_qwords=%llu shim=%d RSP=0x%llx\n",
              (unsigned long long)__ArgCount__,
              (unsigned long long)__EnvCount__,
              (unsigned long long)__TotalQwords__,
@@ -381,12 +338,7 @@ VirtLoad(const VirtRequest* __Req__, VirtImage* __OutImg__)
 {
     if (!__Req__ || !__Req__->File || !__OutImg__ || !__OutImg__->Space)
     {
-        PError("VirtLoad: bad args (Req=%p File=%p OutImg=%p Space=%p)\n",
-               __Req__,
-               __Req__ ? __Req__->File : NULL,
-               __OutImg__,
-               __OutImg__ ? __OutImg__->Space : NULL);
-        return -1;
+        return -BadArgs;
     }
 
     VirtualMemorySpace* Space = __OutImg__->Space;
@@ -403,22 +355,21 @@ VirtLoad(const VirtRequest* __Req__, VirtImage* __OutImg__)
     const DynLoader* Ldr = DynLoaderSelect(__Req__->File);
     if (!Ldr)
     {
-        PError("VirtLoad: no loader matched file\n");
-        return -1;
+        return -NoSuch;
     }
 
     void* ImagePriv = KMalloc(4096);
     if (!ImagePriv)
     {
-        PError("VirtLoad: KMalloc failed for loader-private buffer\n");
-        return -1;
+        return -BadAlloc;
     }
 
-    if (Ldr->Ops.Load(__Req__->File, Space, ImagePriv) != 0)
+    if (Ldr->Ops.Load(__Req__->File, Space, ImagePriv) != SysOkay)
     {
-        PError("VirtLoad: loader->Ops.Load failed\n");
-        KFree(ImagePriv);
-        return -1;
+        SysErr  err;
+        SysErr* Error = &err;
+        KFree(ImagePriv, Error);
+        return -ErrReturn;
     }
 
     VirtImage* Loaded      = (VirtImage*)ImagePriv;
@@ -429,29 +380,28 @@ VirtLoad(const VirtRequest* __Req__, VirtImage* __OutImg__)
     if (Ldr->Ops.BuildAux)
     {
         uint64_t auxBuf[64] = {0};
-        if (Ldr->Ops.BuildAux(__Req__->File, __OutImg__, auxBuf, (long)sizeof(auxBuf)) == 0)
+        if (Ldr->Ops.BuildAux(__Req__->File, __OutImg__, auxBuf, (long)sizeof(auxBuf)) == SysOkay)
         {
             __OutImg__->Auxv.Buf = (uint64_t*)KMalloc(sizeof(auxBuf));
             __OutImg__->Auxv.Cap = (long)(sizeof(auxBuf) / sizeof(uint64_t));
             __OutImg__->Auxv.Len = ((VirtImage*)__OutImg__)->Auxv.Len;
-            __builtin_memcpy(__OutImg__->Auxv.Buf, auxBuf, sizeof(auxBuf));
+            memcpy(__OutImg__->Auxv.Buf, auxBuf, sizeof(auxBuf));
         }
     }
 
     /* Stack setup into the same Space */
     uint64_t Rsp = 0;
-    if (VirtSetupStack(Space, __Req__->Argv, __Req__->Envp, 1, &Rsp) == 0)
+    if (VirtSetupStack(Space, __Req__->Argv, __Req__->Envp, 1, &Rsp) == Nothing)
     {
-        PError("VirtLoad: VirtSetupStack failed\n");
-        return -1;
+        return -NotCanonical;
     }
     __OutImg__->UserSp = Rsp;
 
-    PSuccess("VirtLoad: completed (Entry=0x%llx Base=0x%llx SpacePml4=0x%llx)\n",
+    PSuccess("Load completed (Entry=0x%llx Base=0x%llx SpacePml4=0x%llx)\n",
              (unsigned long long)__OutImg__->Entry,
              (unsigned long long)__OutImg__->LoadBase,
              (unsigned long long)Space->PhysicalBase);
-    return 0;
+    return SysOkay;
 }
 
 int
@@ -459,8 +409,9 @@ VirtCommit(VirtImage* __Img__)
 {
     if (!__Img__ || !__Img__->Space)
     {
-        return -1;
+        return -BadArgs;
     }
+
     /*Stubber and can be used to make something*/
-    return 0;
+    return SysOkay;
 }

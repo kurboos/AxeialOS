@@ -7,101 +7,81 @@
 #include <String.h>
 #include <VFS.h>
 
-/**
- * @brief Install an ELF module
- *
- * @details Loads an ELF object file from the given path, allocates and maps all
- * 			sections, resolves symbols, applies relocations, and calls the module_init
- * 			entry point. On success the module remains resident; transient buffers are
- * 			freed. On failure, allocated memory is released.
- *
- * @param __Path__ Path to the ELF module file
- * @return 0 on success, -1 on failure
- */
 int
 InstallModule(const char* __Path__)
 {
     if (!__Path__)
     {
-        PError("MOD: Invalid path (NULL)\n");
-        return -1;
+        return -BadArgs;
     }
 
     static uint8_t ZeroStub[1] = {0};
 
+    SysErr  err;
+    SysErr* Error = &err;
+
     Elf64_Ehdr Hdr;
     long       HdrLen = 0;
 
-    if (VfsReadAll(__Path__, &Hdr, (long)sizeof(Hdr), &HdrLen) != 0 || HdrLen < (long)sizeof(Hdr))
+    if (VfsReadAll(__Path__, &Hdr, (long)sizeof(Hdr), &HdrLen) != SysOkay ||
+        HdrLen < (long)sizeof(Hdr))
     {
-        PError("MOD: Failed to read ELF header\n");
-        return -1;
+        return -BadEntity;
     }
 
     if (Hdr.e_ident[0] != 0x7F || Hdr.e_ident[1] != 'E' || Hdr.e_ident[2] != 'L' ||
         Hdr.e_ident[3] != 'F')
     {
-        PError("MOD: Bad ELF magic\n");
-        return -1;
+        return -BadEntity;
     }
 
     if (Hdr.e_ident[4] != 2)
     {
-        PError("MOD: Not ELF64\n");
-        return -1;
+        return -Dangling;
     }
 
     if (Hdr.e_machine != 0x3E)
     {
-        PError("MOD: Not x86-64\n");
-        return -1;
+        return -Dangling;
     }
 
     if (Hdr.e_type != 1 && Hdr.e_type != 3)
     {
-        PError("MOD: Unsupported ELF type\n");
-        return -1;
+        return -Impilict;
     }
-
-    PInfo("ELF: Header valid\n");
 
     long ShNum = (long)Hdr.e_shnum;
     if (ShNum <= 0)
     {
-        PError("MOD: e_shnum=0\n");
-        return -1;
+        return -Limits;
     }
 
     long        ShtBytes = ShNum * (long)sizeof(Elf64_Shdr);
     Elf64_Shdr* ShTbl    = (Elf64_Shdr*)KMalloc((size_t)ShtBytes);
     if (!ShTbl)
     {
-        PError("MOD: KMalloc ShTbl failed\n");
-        return -1;
+        return -BadAlloc;
     }
 
     {
         File* F = VfsOpen(__Path__, VFlgRDONLY);
         if (!F)
         {
-            KFree(ShTbl);
-            PError("MOD: VfsOpen failed\n");
-            return -1;
+            KFree(ShTbl, Error);
+            return -NotCanonical;
         }
         if (VfsLseek(F, (long)Hdr.e_shoff, VSeekSET) < 0)
         {
             VfsClose(F);
-            KFree(ShTbl);
-            PError("MOD: Seek SHT failed\n");
-            return -1;
+            KFree(ShTbl, Error);
+            return -NoRead;
         }
         long Rd = VfsRead(F, ShTbl, ShtBytes);
         VfsClose(F);
         if (Rd < ShtBytes)
         {
-            KFree(ShTbl);
-            PError("MOD: SHT read failed\n");
-            return -1;
+            KFree(ShTbl, Error);
+            return -NoRead;
         }
     }
 
@@ -120,9 +100,8 @@ InstallModule(const char* __Path__)
     }
     if (SymtabIdx < 0 || StrtabIdx < 0)
     {
-        KFree(ShTbl);
-        PError("MOD: Missing SHT_SYMTAB or SHT_STRTAB\n");
-        return -1;
+        KFree(ShTbl, Error);
+        return -Missing;
     }
 
     const Elf64_Shdr* SymSh = &ShTbl[SymtabIdx];
@@ -134,55 +113,51 @@ InstallModule(const char* __Path__)
     {
         if (SymBuf)
         {
-            KFree(SymBuf);
+            KFree(SymBuf, Error);
         }
         if (StrBuf)
         {
-            KFree(StrBuf);
+            KFree(StrBuf, Error);
         }
-        KFree(ShTbl);
-        PError("MOD: KMalloc sym/str failed\n");
-        return -1;
+        KFree(ShTbl, Error);
+        return -BadAlloc;
     }
 
     {
         File* F = VfsOpen(__Path__, VFlgRDONLY);
         if (!F)
         {
-            KFree(SymBuf);
-            KFree(StrBuf);
-            KFree(ShTbl);
-            PError("MOD: VfsOpen sym/str failed\n");
-            return -1;
+            KFree(SymBuf, Error);
+            KFree(StrBuf, Error);
+            KFree(ShTbl, Error);
+
+            return -NotCanonical;
         }
         if (VfsLseek(F, (long)SymSh->sh_offset, VSeekSET) < 0)
         {
             VfsClose(F);
-            KFree(SymBuf);
-            KFree(StrBuf);
-            KFree(ShTbl);
-            PError("MOD: Seek .symtab failed\n");
-            return -1;
+            KFree(SymBuf, Error);
+            KFree(StrBuf, Error);
+            KFree(ShTbl, Error);
+            return -NoRead;
         }
         long RdS = VfsRead(F, SymBuf, (long)SymSh->sh_size);
         if (VfsLseek(F, (long)StrSh->sh_offset, VSeekSET) < 0)
         {
             VfsClose(F);
-            KFree(SymBuf);
-            KFree(StrBuf);
-            KFree(ShTbl);
-            PError("MOD: Seek .strtab failed\n");
-            return -1;
+            KFree(SymBuf, Error);
+            KFree(StrBuf, Error);
+            KFree(ShTbl, Error);
+            return -NoRead;
         }
         long RdT = VfsRead(F, StrBuf, (long)StrSh->sh_size);
         VfsClose(F);
         if (RdS < (long)SymSh->sh_size || RdT < (long)StrSh->sh_size)
         {
-            KFree(SymBuf);
-            KFree(StrBuf);
-            KFree(ShTbl);
-            PError("MOD: sym/str read short\n");
-            return -1;
+            KFree(SymBuf, Error);
+            KFree(StrBuf, Error);
+            KFree(ShTbl, Error);
+            return -NoRead;
         }
     }
 
@@ -190,17 +165,16 @@ InstallModule(const char* __Path__)
     __ElfSymbol__* Syms = (__ElfSymbol__*)KMalloc((size_t)(SymCount * (long)sizeof(__ElfSymbol__)));
     if (!Syms)
     {
-        KFree(SymBuf);
-        KFree(StrBuf);
-        KFree(ShTbl);
-        PError("MOD: KMalloc Syms failed\n");
-        return -1;
+        KFree(SymBuf, Error);
+        KFree(StrBuf, Error);
+        KFree(ShTbl, Error);
+        return -BadAlloc;
     }
 
     for (long I = 0; I < SymCount; I++)
     {
         uint32_t    NameOff = SymBuf[I].st_name;
-        const char* Nm      = (NameOff < (uint32_t)StrSh->sh_size) ? (StrBuf + NameOff) : 0;
+        const char* Nm      = (NameOff < (uint32_t)StrSh->sh_size) ? (StrBuf + NameOff) : Nothing;
 
         Syms[I].Name         = Nm;
         Syms[I].Value        = SymBuf[I].st_value;
@@ -208,17 +182,15 @@ InstallModule(const char* __Path__)
         Syms[I].Info         = SymBuf[I].st_info;
         Syms[I].ResolvedAddr = 0ULL;
     }
-    PInfo("ELF: Loaded symbols\n");
 
     void** SectionBases = (void**)KMalloc((size_t)(ShNum * (long)sizeof(void*)));
     if (!SectionBases)
     {
-        KFree(Syms);
-        KFree(SymBuf);
-        KFree(StrBuf);
-        KFree(ShTbl);
-        PError("MOD: KMalloc SectionBases failed\n");
-        return -1;
+        KFree(Syms, Error);
+        KFree(SymBuf, Error);
+        KFree(StrBuf, Error);
+        KFree(ShTbl, Error);
+        return -BadAlloc;
     }
     memset(SectionBases, 0, (size_t)(ShNum * (long)sizeof(void*)));
 
@@ -235,11 +207,10 @@ InstallModule(const char* __Path__)
             continue;
         }
 
-        int   IsText = (Flags & (uint64_t)0x4ULL) ? 1 : 0;
-        void* Base   = ModMalloc((size_t)Size, IsText ? 1 : 0);
-        if (!Base)
+        int   IsText = (Flags & (uint64_t)0x4ULL) ? true : false;
+        void* Base   = ModMalloc((size_t)Size, IsText ? true : false);
+        if (Base)
         {
-            PError("MOD: ModMalloc failed\n");
             for (long J = 0; J < ShNum; J++)
             {
                 if (SectionBases[J] && SectionBases[J] != (void*)ZeroStub)
@@ -247,16 +218,16 @@ InstallModule(const char* __Path__)
                     long SzJ = (long)ShTbl[J].sh_size;
                     if (SzJ > 0)
                     {
-                        ModFree(SectionBases[J], (size_t)SzJ);
+                        ModFree(SectionBases[J], (size_t)SzJ, Error);
                     }
                 }
             }
-            KFree(SectionBases);
-            KFree(Syms);
-            KFree(SymBuf);
-            KFree(StrBuf);
-            KFree(ShTbl);
-            return -1;
+            KFree(SectionBases, Error);
+            KFree(Syms, Error);
+            KFree(SymBuf, Error);
+            KFree(StrBuf, Error);
+            KFree(ShTbl, Error);
+            return -BadAlloc;
         }
 
         SectionBases[I] = Base;
@@ -270,21 +241,18 @@ InstallModule(const char* __Path__)
             File* F = VfsOpen(__Path__, VFlgRDONLY);
             if (!F)
             {
-                PError("MOD: VfsOpen payload failed\n");
-                return -1;
+                return -NotCanonical;
             }
             if (VfsLseek(F, (long)S->sh_offset, VSeekSET) < 0)
             {
                 VfsClose(F);
-                PError("MOD: Seek section failed\n");
-                return -1;
+                return -NoRead;
             }
             long Rd = VfsRead(F, Base, Size);
             VfsClose(F);
             if (Rd < Size)
             {
-                PError("MOD: Read section short\n");
-                return -1;
+                return -NoRead;
             }
         }
     }
@@ -325,7 +293,6 @@ InstallModule(const char* __Path__)
         uint32_t TgtIdx = RelSh->sh_info;
         if (TgtIdx >= (uint32_t)ShNum)
         {
-            PWarn("ELF: RELOC invalid target\n");
             continue;
         }
 
@@ -345,30 +312,26 @@ InstallModule(const char* __Path__)
         void* RelBuf = KMalloc((size_t)RelSh->sh_size);
         if (!RelBuf)
         {
-            PError("ELF: KMalloc RELOC buf failed\n");
             continue;
         }
 
         File* RF = VfsOpen(__Path__, VFlgRDONLY);
         if (!RF)
         {
-            KFree(RelBuf);
-            PError("ELF: VfsOpen RELOC failed\n");
+            KFree(RelBuf, Error);
             continue;
         }
         if (VfsLseek(RF, (long)RelSh->sh_offset, VSeekSET) < 0)
         {
             VfsClose(RF);
-            KFree(RelBuf);
-            PError("ELF: Seek RELOC failed\n");
+            KFree(RelBuf, Error);
             continue;
         }
         long RdRel = VfsRead(RF, RelBuf, (long)RelSh->sh_size);
         VfsClose(RF);
         if (RdRel < (long)RelSh->sh_size)
         {
-            KFree(RelBuf);
-            PError("ELF: RELOC read short\n");
+            KFree(RelBuf, Error);
             continue;
         }
 
@@ -407,7 +370,6 @@ InstallModule(const char* __Path__)
 
             if (SymIndex >= (uint32_t)SymCount)
             {
-                PError("ELF: RELOC sym out of range\n");
                 continue;
             }
 
@@ -420,7 +382,6 @@ InstallModule(const char* __Path__)
                 S         = (uint64_t)Ext;
                 if (!Ext)
                 {
-                    PError("ELF: Undefined external symbol\n");
                     continue;
                 }
             }
@@ -471,31 +432,29 @@ InstallModule(const char* __Path__)
                     }
 
                 default:
-                    PWarn("ELF: RELOC unsupported type\n");
                     break;
             }
         }
 
-        KFree(RelBuf);
+        KFree(RelBuf, Error);
     }
     const __ElfSymbol__* InitSym = 0;
     const __ElfSymbol__* ExitSym = 0;
 
     for (long I = 0; I < SymCount; I++)
     {
-        if (Syms[I].Name && strcmp(Syms[I].Name, "module_init") == 0)
+        if (Syms[I].Name && strcmp(Syms[I].Name, "module_init") == Nothing)
         {
             InitSym = &Syms[I];
         }
 
-        else if (Syms[I].Name && strcmp(Syms[I].Name, "module_exit") == 0)
+        else if (Syms[I].Name && strcmp(Syms[I].Name, "module_exit") == Nothing)
         {
             ExitSym = &Syms[I];
         }
     }
     if (!InitSym)
     {
-        PError("MOD: module_init not found\n");
         for (long J = 0; J < ShNum; J++)
         {
             if (SectionBases[J] && SectionBases[J] != (void*)ZeroStub)
@@ -503,16 +462,16 @@ InstallModule(const char* __Path__)
                 long SzJ = (long)ShTbl[J].sh_size;
                 if (SzJ > 0)
                 {
-                    ModFree(SectionBases[J], (size_t)SzJ);
+                    ModFree(SectionBases[J], (size_t)SzJ, Error);
                 }
             }
         }
-        KFree(SectionBases);
-        KFree(Syms);
-        KFree(StrBuf);
-        KFree(SymBuf);
-        KFree(ShTbl);
-        return -1;
+        KFree(SectionBases, Error);
+        KFree(Syms, Error);
+        KFree(StrBuf, Error);
+        KFree(SymBuf, Error);
+        KFree(ShTbl, Error);
+        return -Missing;
     }
 
     void (*InitFn)(void) = 0;
@@ -525,7 +484,7 @@ InstallModule(const char* __Path__)
     else
     {
         uint8_t* Base =
-            (uint8_t*)((InitSym->Shndx < (uint16_t)ShNum) ? SectionBases[InitSym->Shndx] : 0);
+            (uint8_t*)((InitSym->Shndx < (uint16_t)ShNum) ? SectionBases[InitSym->Shndx] : Nothing);
 
         InitFn = (void (*)(void))(Base ? (Base + InitSym->Value) : (uint8_t*)InitSym->Value);
     }
@@ -539,21 +498,20 @@ InstallModule(const char* __Path__)
         else
         {
             uint8_t* BaseE =
-                (uint8_t*)((ExitSym->Shndx < (uint16_t)ShNum) ? SectionBases[ExitSym->Shndx] : 0);
+                (uint8_t*)((ExitSym->Shndx < (uint16_t)ShNum) ? SectionBases[ExitSym->Shndx]
+                                                              : Nothing);
 
             ExitFn = (void (*)(void))(BaseE ? (BaseE + ExitSym->Value) : (uint8_t*)ExitSym->Value);
         }
     }
 
-    PInfo("MOD: Calling module_init at %p\n", InitFn);
     InitFn();
 
     ModuleRecord* Rec = (ModuleRecord*)KMalloc(sizeof(ModuleRecord));
     if (!Rec)
     {
-        PError("MOD: Registry alloc failed\n");
-        PSuccess("MOD: Installed %s\n", __Path__);
-        return 0;
+        /*its fine*/
+        return SysOkay;
     }
 
     Rec->Name         = __Path__;
@@ -570,46 +528,36 @@ InstallModule(const char* __Path__)
     Rec->Next         = 0;
 
     ModuleRegistryAdd(Rec);
-    PSuccess("MOD: Installed %s\n", __Path__);
-    return 0;
+    PSuccess("Installed %s\n", __Path__);
+    return SysOkay;
 }
 
-/**
- * @brief Uninstall an ELF module
- *
- * @details Finds the module record by path, calls module_exit if present, frees all
- * 			allocated section memory and buffers, and removes the record from registry.
- *
- * @param __Path__ Path used to install the module
- * @return 0 on success, -1 on failure
- */
 int
 UnInstallModule(const char* __Path__)
 {
     if (!__Path__)
     {
-        PError("MOD: Uninstall invalid path (NULL)\n");
-        return -1;
+        return -BadArgs;
     }
 
     ModuleRecord* Rec = ModuleRegistryFind(__Path__);
     if (!Rec)
     {
-        PError("MOD: Module not found for uninstall: %s\n", __Path__);
-        return -1;
+        return -NotRecorded;
     }
 
     if (Rec->RefCount > 1)
     {
-        PError("MOD: Module in use (ref=%d)\n", Rec->RefCount);
-        return -1;
+        return -Busy;
     }
 
     if (Rec->ExitFn)
     {
-        PInfo("MOD: Calling module_exit at %p\n", Rec->ExitFn);
         Rec->ExitFn();
     }
+
+    SysErr  err;
+    SysErr* Error = &err;
 
     for (long I = 0; I < Rec->SectionCount; I++)
     {
@@ -618,20 +566,20 @@ UnInstallModule(const char* __Path__)
             long Sz = (long)Rec->ShTbl[I].sh_size;
             if (Sz > 0)
             {
-                ModFree(Rec->SectionBases[I], (size_t)Sz);
+                ModFree(Rec->SectionBases[I], (size_t)Sz, Error);
             }
         }
     }
 
     ModuleRegistryRemove(Rec);
 
-    KFree(Rec->SectionBases);
-    KFree(Rec->Syms);
-    KFree(Rec->SymBuf);
-    KFree(Rec->StrBuf);
-    KFree(Rec->ShTbl);
-    KFree(Rec);
+    KFree(Rec->SectionBases, Error);
+    KFree(Rec->Syms, Error);
+    KFree(Rec->SymBuf, Error);
+    KFree(Rec->StrBuf, Error);
+    KFree(Rec->ShTbl, Error);
+    KFree(Rec, Error);
 
-    PSuccess("MOD: Uninstalled %s\n", __Path__);
-    return 0;
+    PSuccess("Uninstalled %s\n", __Path__);
+    return SysOkay;
 }

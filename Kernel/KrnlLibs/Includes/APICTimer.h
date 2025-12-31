@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Errnos.h>
+
 #define TimerApicBaseMsr           0x1B
 #define TimerApicBaseEnable        (1ULL << 11)
 #define TimerApicRegVersion        0x030

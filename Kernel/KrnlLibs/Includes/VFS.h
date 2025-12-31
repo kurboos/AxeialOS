@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KExports.h>
 
 typedef struct Vnode         Vnode;
@@ -211,7 +212,7 @@ typedef struct SuperOps
 {
     int (*Sync)(Superblock*);
     int (*StatFs)(Superblock*, VfsStatFs*);
-    void (*Release)(Superblock*);
+    void (*Release)(Superblock*, SysErr*);
     int (*Umount)(Superblock*);
 
 } SuperOps;

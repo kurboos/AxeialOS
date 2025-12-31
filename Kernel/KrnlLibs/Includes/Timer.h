@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <IDT.h>
 #include <KrnPrintf.h>
 
@@ -31,10 +32,10 @@ typedef struct
 extern TimerManager      Timer;
 extern volatile uint32_t TimerInterruptCount;
 
-void     InitializeTimer(void);
-void     TimerHandler(InterruptFrame* __Frame__);
+void     InitializeTimer(SysErr* __Err__);
+void     TimerHandler(InterruptFrame* __Frame__, SysErr* __Err__);
 uint64_t GetSystemTicks(void);
-void     Sleep(uint32_t __Milliseconds__);
+void     Sleep(uint32_t __Milliseconds__, SysErr* __Err__);
 uint32_t GetTimerInterruptCount(void);
 
 int DetectHpetTimer(void);
@@ -47,4 +48,4 @@ int InitializePitTimer(void);
 uint64_t ReadMsr(uint32_t __Msr__);
 void     WriteMsr(uint32_t __Msr__, uint64_t __Value__);
 
-void SetupApicTimerForThisCpu(void);
+void SetupApicTimerForThisCpu(SysErr* __Err__);

@@ -4,6 +4,7 @@
 #include <BootConsole.h>
 #include <KExports.h>
 /*For Spinlocks*/
+#include <Errnos.h>
 #include <Sync.h>
 
 /*Uncomment for Debug Output*/

@@ -2,6 +2,7 @@
 
 #include <AllTypes.h>
 
+#include <Errnos.h>
 #define SerialPort1         0x3F8
 #define SerialDataReg       0
 #define SerialIntEnableReg  1

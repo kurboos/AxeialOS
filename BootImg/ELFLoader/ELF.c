@@ -1,13 +1,47 @@
-#include <Dev.h>
-#include <EveryType.h>
-#include <Heaps.h>
-#include <Loader.h>
-#include <Logings.h>
-#include <Memory.h>
-#include <StrHelp.h>
-#include <SyncSys.h>
-#include <ThrdSys.h>
-#include <Vfs.h>
+#include <APICTimer.h>
+#include <AllTypes.h>
+#include <AxeSchd.h>
+#include <AxeThreads.h>
+#include <BootConsole.h>
+#include <BootImg.h>
+#include <DevFS.h>
+#include <EarlyBootFB.h>
+#include <GDT.h>
+#include <IDT.h>
+#include <KExports.h>
+#include <KHeap.h>
+#include <KrnPrintf.h>
+#include <LimineServices.h>
+#include <ModELF.h>
+#include <ModMemMgr.h>
+#include <PMM.h>
+#include <POSIXFd.h>
+#include <POSIXProc.h>
+#include <POSIXProcFS.h>
+#include <POSIXSignals.h>
+#include <SMP.h>
+#include <Serial.h>
+#include <SymAP.h>
+#include <Sync.h>
+#include <Syscall.h>
+#include <Timer.h>
+#include <VFS.h>
+#include <VMM.h>
+#include <VirtBin.h>
+
+/*
+
+
+
+
+
+    ONE HUGE NOTE: This driver is deprecated because of the kernel rewrite!
+
+
+
+
+
+*/
 
 #define __attribute_unused__ __attribute__((unused))
 
@@ -27,7 +61,7 @@ typedef struct
     uint16_t      e_shentsize;
     uint16_t      e_shnum;
     uint16_t      e_shstrndx;
-} Elf64_Ehdr;
+} Elf64_EhdrMOD;
 
 typedef struct
 {
@@ -100,7 +134,7 @@ __ReadExact__(File* __File__, uint64_t __Off__, void* __Buf__, long __Len__)
 static int
 Elf64Probe(File* __File__)
 {
-    Elf64_Ehdr Eh = (Elf64_Ehdr){0};
+    Elf64_EhdrMOD Eh = (Elf64_EhdrMOD){0};
 
     if (__ReadExact__(__File__, 0, &Eh, (long)sizeof(Eh)) != 0)
     {
@@ -137,8 +171,8 @@ Elf64Load(File* __File__, VirtualMemorySpace* __Space__, void* __OutImage__)
         return -1;
     }
 
-    VirtImage* Img = (VirtImage*)__OutImage__;
-    Elf64_Ehdr Eh  = (Elf64_Ehdr){0};
+    VirtImage*    Img = (VirtImage*)__OutImage__;
+    Elf64_EhdrMOD Eh  = (Elf64_EhdrMOD){0};
 
     if (__ReadExact__(__File__, 0, &Eh, (long)sizeof(Eh)) != 0)
     {

@@ -1,5 +1,6 @@
 #pragma once
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KExports.h>
 #include <VFS.h>
 #include <VMM.h>

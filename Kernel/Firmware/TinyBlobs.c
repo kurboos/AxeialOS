@@ -3,11 +3,11 @@
 const unsigned char*
 FirmData(const FirmwareHandle* __Handle__)
 {
-    return __Handle__ ? __Handle__->Blob.Data : 0;
+    return __Handle__ ? __Handle__->Blob.Data : Nothing;
 }
 
 long
 FirmSize(const FirmwareHandle* __Handle__)
 {
-    return __Handle__ ? __Handle__->Blob.Size : 0;
+    return __Handle__ ? __Handle__->Blob.Size : Nothing;
 }

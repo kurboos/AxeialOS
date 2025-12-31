@@ -1,10 +1,8 @@
-#include <Timer.h> /* Timer management structures and constants */
+#include <Timer.h>
 
 int
 InitializePitTimer(void)
 {
-    PInfo("Initializing PIT Timer...\n");
-
     uint16_t Divisor = 1193182 /* PIT base frequency */ / TimerTargetFrequency;
 
     __asm__ volatile("outb %0, %1" : : "a"((uint8_t)0x36), "Nd"((uint16_t)0x43));
@@ -14,5 +12,5 @@ InitializePitTimer(void)
     Timer.TimerFrequency = TimerTargetFrequency;
     PSuccess("PIT Timer initialized at %u Hz\n", Timer.TimerFrequency);
 
-    return 1;
+    return SysOkay;
 }

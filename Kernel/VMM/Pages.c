@@ -3,10 +3,9 @@
 uint64_t*
 GetPageTable(uint64_t* __Pml4__, uint64_t __VirtAddr__, int __Level__, int __Create__)
 {
-    uint32_t Pml4Index = (__VirtAddr__ >> 39) & 0x1FF;
-    uint32_t PdptIndex = (__VirtAddr__ >> 30) & 0x1FF;
-    uint32_t PdIndex   = (__VirtAddr__ >> 21) & 0x1FF;
-
+    uint32_t  Pml4Index    = (__VirtAddr__ >> 39) & 0x1FF;
+    uint32_t  PdptIndex    = (__VirtAddr__ >> 30) & 0x1FF;
+    uint32_t  PdIndex      = (__VirtAddr__ >> 21) & 0x1FF;
     uint64_t* CurrentTable = __Pml4__;
     uint32_t  CurrentIndex = Pml4Index;
 
@@ -16,14 +15,13 @@ GetPageTable(uint64_t* __Pml4__, uint64_t __VirtAddr__, int __Level__, int __Cre
         {
             if (!__Create__)
             {
-                return NULL;
+                return Error_TO_Pointer(-BadAlloc);
             }
 
             uint64_t NewTablePhys = AllocPage();
             if (!NewTablePhys)
             {
-                PError("Failed to allocate page table at level %d\n", Level - 1);
-                return NULL;
+                return Error_TO_Pointer(-BadAlloc);
             }
 
             uint64_t* NewTable = (uint64_t*)PhysToVirt(NewTablePhys);
@@ -61,13 +59,13 @@ GetPageTable(uint64_t* __Pml4__, uint64_t __VirtAddr__, int __Level__, int __Cre
 }
 
 void
-FlushTlb(uint64_t __VirtAddr__)
+FlushTlb(uint64_t __VirtAddr__, SysErr* __Err__ __attribute((unused)))
 {
     __asm__ volatile("invlpg (%0)" ::"r"(__VirtAddr__) : "memory");
 }
 
 void
-FlushAllTlb(void)
+FlushAllTlb(SysErr* __Err__ __attribute((unused)))
 {
     uint64_t Cr3;
 

@@ -5,12 +5,12 @@ IsValidPhysicalAddress(uint64_t __PhysAddr__)
 {
     if (__PhysAddr__ == 0)
     {
-        return 0;
+        return -NotCanonical;
     }
 
     if ((__PhysAddr__ & 0xFFF) != 0)
     {
-        return 0;
+        return -NotCanonical;
     }
 
     for (uint32_t Index = 0; Index < Pmm.RegionCount; Index++)
@@ -20,11 +20,11 @@ IsValidPhysicalAddress(uint64_t __PhysAddr__)
 
         if (__PhysAddr__ >= RegionStart && __PhysAddr__ < RegionEnd)
         {
-            return 1; /* Address is valid within this region */
+            return SysOkay; /* Address is valid within this region */
         }
     }
 
-    return 0;
+    return -NotCanonical;
 }
 
 static int
@@ -32,7 +32,7 @@ IsValidHhdmAddress(uint64_t __VirtAddr__)
 {
     if (__VirtAddr__ < Vmm.HhdmOffset)
     {
-        return 0;
+        return -NotCanonical;
     }
 
     uint64_t PhysAddr = __VirtAddr__ - Vmm.HhdmOffset;
@@ -45,7 +45,7 @@ IsSafeToAccess(uint64_t* __Ptr__)
 {
     if (!__Ptr__)
     {
-        return 0;
+        return -BadArgs;
     }
 
     uint64_t VirtAddr = (uint64_t)__Ptr__;
@@ -54,23 +54,23 @@ IsSafeToAccess(uint64_t* __Ptr__)
 }
 
 void
-VmmDumpSpace(VirtualMemorySpace* __Space__)
+VmmDumpSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
 {
     if (!__Space__)
     {
-        PError("Cannot dump null virtual space\n");
+        SlotError(__Err__, -NotCanonical);
         return;
     }
 
     if (!IsValidPhysicalAddress(__Space__->PhysicalBase))
     {
-        PError("Invalid PML4 physical address: 0x%016lx\n", __Space__->PhysicalBase);
+        SlotError(__Err__, -NotCanonical);
         return;
     }
 
     if (!__Space__->Pml4 || !IsValidHhdmAddress((uint64_t)__Space__->Pml4))
     {
-        PError("Invalid PML4 virtual address: 0x%016lx\n", (uint64_t)__Space__->Pml4);
+        SlotError(__Err__, -NotCanonical);
         return;
     }
 
@@ -180,11 +180,11 @@ VmmDumpSpace(VirtualMemorySpace* __Space__)
 }
 
 void
-VmmDumpStats(void)
+VmmDumpStats(SysErr* __Err__)
 {
     if (!Vmm.HhdmOffset)
     {
-        PError("VMM not properly initialized - no HHDM offset\n");
+        SlotError(__Err__, -NotCanonical);
         return;
     }
 
@@ -209,7 +209,7 @@ VmmDumpStats(void)
     if (Vmm.KernelSpace)
     {
         KrnPrintf("  Kernel Space: 0x%016lx\n", (uint64_t)Vmm.KernelSpace);
-        VmmDumpSpace(Vmm.KernelSpace);
+        VmmDumpSpace(Vmm.KernelSpace, __Err__);
     }
     else
     {

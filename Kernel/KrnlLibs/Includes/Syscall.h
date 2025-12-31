@@ -3,6 +3,7 @@
 #include <AllTypes.h>
 #include <IDT.h>
 
+#include <Errnos.h>
 #define MaxSysNo 99999
 
 typedef int64_t (*SysHandle)(uint64_t __Arg1__,

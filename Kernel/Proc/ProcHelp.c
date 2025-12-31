@@ -11,20 +11,17 @@ __AppendStr__(char* __Buf__, long __Cap__, long* __Off__, const char* __Str__)
 {
     if (!__Buf__ || !__Off__ || !__Str__ || __Cap__ <= 0)
     {
-        PError("__AppendStr__: bad args\n");
-        return -1;
+        return -BadArgs;
     }
 
     long N = *__Off__;
     if (N < 0)
     {
-        PError("__AppendStr__: negative N=%ld\n", N);
-        return -1;
+        return -TooSmall;
     }
     if (N >= __Cap__)
     {
-        PDebug("__AppendStr__: full N=%ld Cap=%ld\n", N, __Cap__);
-        return 0;
+        return Nothing;
     }
 
     long Rem = __Cap__ - N;
@@ -33,12 +30,11 @@ __AppendStr__(char* __Buf__, long __Cap__, long* __Off__, const char* __Str__)
 
     if (C > 0)
     {
-        __builtin_memcpy(__Buf__ + N, __Str__, (size_t)C);
+        memcpy(__Buf__ + N, __Str__, (size_t)C);
         N += C;
         *__Off__ = N;
     }
 
-    PDebug("__AppendStr__: wrote=%ld newN=%ld RemNow=%ld\n", C, N, (__Cap__ - N));
     return C;
 }
 
@@ -47,27 +43,23 @@ __AppendChar__(char* __Buf__, long __Cap__, long* __Off__, char __Ch__)
 {
     if (!__Buf__ || !__Off__ || __Cap__ <= 0)
     {
-        PError("__AppendChar__: bad args\n");
-        return -1;
+        return -BadArgs;
     }
 
     long N = *__Off__;
     if (N < 0)
     {
-        PError("__AppendChar__: negative N=%ld\n", N);
-        return -1;
+        return -TooSmall;
     }
     if (N >= __Cap__)
     {
-        PDebug("__AppendChar__: full N=%ld Cap=%ld\n", N, __Cap__);
-        return 0;
+        return Nothing;
     }
 
     __Buf__[N++] = __Ch__;
     *__Off__     = N;
 
-    PDebug("__AppendChar__: wrote=1 newN=%ld RemNow=%ld\n", N, (__Cap__ - N));
-    return 1;
+    return 1; /*it's a char*/
 }
 
 static inline long
@@ -75,9 +67,9 @@ __AppendU64Dec__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 {
     if (!__Buf__ || !__Off__ || __Cap__ <= 0)
     {
-        PError("__AppendU64Dec__: bad args\n");
-        return -1;
+        return -BadArgs;
     }
+
     char Num[32];
     UnsignedToStringEx(__V__, Num, 10, 0);
     Num[31] = '\0'; /* belt-and-suspenders */
@@ -89,8 +81,7 @@ __AppendU64Hex__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 {
     if (!__Buf__ || !__Off__ || __Cap__ <= 0)
     {
-        PError("__AppendU64Hex__: bad args\n");
-        return -1;
+        return -BadArgs;
     }
     char Num[32];
     UnsignedToStringEx(__V__, Num, 16, 0);
@@ -103,8 +94,7 @@ __AppendU64Oct__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 {
     if (!__Buf__ || !__Off__ || __Cap__ <= 0)
     {
-        PError("__AppendU64Oct__: bad args\n");
-        return -1;
+        return -BadArgs;
     }
     char Num[32];
     UnsignedToStringEx(__V__, Num, 8, 0);
@@ -117,8 +107,7 @@ ProcFsMakeStatus(PosixProc* __Proc__, char* __Buff__, long __Caps__)
 {
     if (!__Proc__ || !__Buff__ || __Caps__ <= 0)
     {
-        PError("ProcFsMakeStatus: bad args\n");
-        return -1;
+        return -BadArgs;
     }
 
     long N  = 0;
@@ -259,8 +248,7 @@ ProcFsMakeStat(PosixProc* __Proc__, char* __Buf__, long __Cap__)
 {
     if (!__Proc__ || !__Buf__ || __Cap__ <= 0)
     {
-        PError("ProcFsMakeStat: bad args\n");
-        return -1;
+        return -BadArgs;
     }
 
     long N  = 0;
@@ -328,12 +316,12 @@ ProcFsListFds(PosixProc* __Proc__, char* __Buf__, long __Cap__)
 {
     if (!__Proc__ || !__Buf__ || __Cap__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
     if (!__Proc__->Fds)
     {
         __Buf__[0] = '\0';
-        return 0;
+        return Nothing;
     }
 
     long N = 0;
@@ -374,10 +362,10 @@ ProcFsWriteState(PosixProc* __Proc__, const char* __Buf__, long __Len__)
 {
     if (!__Proc__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
 
-    if (strncmp(__Buf__, "stop", (size_t)__Len__) == 0)
+    if (strncmp(__Buf__, "stop", (size_t)__Len__) == Nothing)
     {
         if (__Proc__->MainThread)
         {
@@ -385,7 +373,7 @@ ProcFsWriteState(PosixProc* __Proc__, const char* __Buf__, long __Len__)
         }
         return __Len__;
     }
-    if (strncmp(__Buf__, "cont", (size_t)__Len__) == 0)
+    if (strncmp(__Buf__, "cont", (size_t)__Len__) == Nothing)
     {
         if (__Proc__->MainThread)
         {
@@ -393,7 +381,7 @@ ProcFsWriteState(PosixProc* __Proc__, const char* __Buf__, long __Len__)
         }
         return __Len__;
     }
-    return -1;
+    return -BadEntry;
 }
 
 long
@@ -401,7 +389,7 @@ ProcFsWriteExec(PosixProc* __Proc__, const char* __Buf__, long __Len__)
 {
     if (!__Proc__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
 
     char Path[256];
@@ -412,35 +400,35 @@ ProcFsWriteExec(PosixProc* __Proc__, const char* __Buf__, long __Len__)
     const char* const Argv[] = {Path, NULL};
     const char* const Envp[] = {NULL};
 
-    return (PosixProcExecve(__Proc__, Path, Argv, Envp) == 0) ? __Len__ : -1;
+    return (PosixProcExecve(__Proc__, Path, Argv, Envp) == SysOkay) ? __Len__ : -NotCanonical;
 }
 long
 ProcFsWriteSignal(PosixProc* __Proc__, const char* __Buf__, long __Len__)
 {
     if (!__Proc__ || !__Buf__ || __Len__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
 
-    if (strncmp(__Buf__, "TERM", (size_t)__Len__) == 0)
+    if (strncmp(__Buf__, "TERM", (size_t)__Len__) == Nothing)
     {
-        return PosixKill(__Proc__->Pid, SigTerm) == 0 ? __Len__ : -1;
+        return PosixKill(__Proc__->Pid, SigTerm) == SysOkay ? __Len__ : -ErrReturn;
     }
-    if (strncmp(__Buf__, "KILL", (size_t)__Len__) == 0)
+    if (strncmp(__Buf__, "KILL", (size_t)__Len__) == Nothing)
     {
-        return PosixKill(__Proc__->Pid, SigKill) == 0 ? __Len__ : -1;
+        return PosixKill(__Proc__->Pid, SigKill) == SysOkay ? __Len__ : -ErrReturn;
     }
-    if (strncmp(__Buf__, "INT", (size_t)__Len__) == 0)
+    if (strncmp(__Buf__, "INT", (size_t)__Len__) == Nothing)
     {
-        return PosixKill(__Proc__->Pid, SigInt) == 0 ? __Len__ : -1;
+        return PosixKill(__Proc__->Pid, SigInt) == SysOkay ? __Len__ : -ErrReturn;
     }
-    if (strncmp(__Buf__, "STOP", (size_t)__Len__) == 0)
+    if (strncmp(__Buf__, "STOP", (size_t)__Len__) == Nothing)
     {
-        return PosixKill(__Proc__->Pid, SigStop) == 0 ? __Len__ : -1;
+        return PosixKill(__Proc__->Pid, SigStop) == SysOkay ? __Len__ : -ErrReturn;
     }
-    if (strncmp(__Buf__, "CONT", (size_t)__Len__) == 0)
+    if (strncmp(__Buf__, "CONT", (size_t)__Len__) == Nothing)
     {
-        return PosixKill(__Proc__->Pid, SigCont) == 0 ? __Len__ : -1;
+        return PosixKill(__Proc__->Pid, SigCont) == SysOkay ? __Len__ : -ErrReturn;
     }
-    return -1;
+    return -BadEntry;
 }

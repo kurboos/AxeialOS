@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <SMP.h>
 #include <Sync.h>
 #include <VMM.h>
@@ -144,27 +145,27 @@ extern SpinLock ThreadListLock;
 extern Thread*  CurrentThreads[MaxCPUs];
 
 /*Thread Manager Core*/
-void    InitializeThreadManager(void);
+void    InitializeThreadManager(SysErr* __Err__);
 Thread* GetCurrentThread(uint32_t __CpuId__);
-void    SetCurrentThread(uint32_t __CpuId__, Thread* __ThreadPtr__); //
+void    SetCurrentThread(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__); //
 
 /*Thread Lifecycle*/
 Thread* CreateThread(ThreadType     __Type__,
                      void*          __EntryPoint__,
                      void*          __Argument__,
                      ThreadPriority __Priority__);
-void    DestroyThread(Thread* __ThreadPtr__);
-void    SuspendThread(Thread* __ThreadPtr__);
-void    ResumeThread(Thread* __ThreadPtr__);
+void    DestroyThread(Thread* __ThreadPtr__, SysErr* __Err__);
+void    SuspendThread(Thread* __ThreadPtr__, SysErr* __Err__);
+void    ResumeThread(Thread* __ThreadPtr__, SysErr* __Err__);
 
 /*Thread Properties*/
-void SetThreadPriority(Thread* __ThreadPtr__, ThreadPriority __Priority__);
-void SetThreadAffinity(Thread* __ThreadPtr__, uint32_t __CpuMask__);
+void SetThreadPriority(Thread* __ThreadPtr__, ThreadPriority __Priority__, SysErr* __Err__);
+void SetThreadAffinity(Thread* __ThreadPtr__, uint32_t __CpuMask__, SysErr* __Err__);
 
 /*Thread Control*/
-void ThreadYield(void);
-void ThreadSleep(uint64_t __Milliseconds__);
-void ThreadExit(uint32_t __ExitCode__);
+void ThreadYield(SysErr* __Err__);
+void ThreadSleep(uint64_t __Milliseconds__, SysErr* __Err__);
+void ThreadExit(uint32_t __ExitCode__, SysErr* __Err__);
 
 /*Thread Queries*/
 Thread*  FindThreadById(uint32_t __ThreadId__);
@@ -174,18 +175,19 @@ uint32_t GetThreadCount(void);
 uint32_t GetCpuLoad(uint32_t __CpuId__);             //
 uint32_t FindLeastLoadedCpu(void);                   //
 uint32_t CalculateOptimalCpu(Thread* __ThreadPtr__); //
-void     ThreadExecute(Thread* __ThreadPtr__);
-void     ThreadExecuteMultiple(Thread** __ThreadArray__, uint32_t __ThreadCount__);
-void     LoadBalanceThreads(void); //
+void     ThreadExecute(Thread* __ThreadPtr__, SysErr* __Err__);
+void     ThreadExecuteMultiple(Thread** __ThreadArray__, uint32_t __ThreadCount__, SysErr* __Err__);
+void     LoadBalanceThreads(SysErr* __Err__); //
 void     GetSystemLoadStats(uint32_t* __TotalThreads__,
                             uint32_t* __AverageLoad__,
                             uint32_t* __MaxLoad__,
-                            uint32_t* __MinLoad__); //
+                            uint32_t* __MinLoad__,
+                            SysErr*   __Err__); //
 
 /*Utilities*/
-void WakeSleepingThreads(void);             //
-void DumpThreadInfo(Thread* __ThreadPtr__); //
-void DumpAllThreads(void);                  //
+void WakeSleepingThreads(SysErr* __Err__);                   //
+void DumpThreadInfo(Thread* __ThreadPtr__, SysErr* __Err__); //
+void DumpAllThreads(SysErr* __Err__);                        //
 
 KEXPORT(GetCurrentThread);
 KEXPORT(CreateThread);

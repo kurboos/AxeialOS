@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <GDT.h>
 #include <IDT.h>
 #include <KrnPrintf.h>

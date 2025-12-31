@@ -12,15 +12,16 @@ FirmRequest(FirmwareHandle**    __OutHandle__,
 {
     if (!__OutHandle__ || !__Desc__)
     {
-        PError("FirmRequest: invalid args\n");
-        return -1;
+        return -BadArgs;
     }
+
+    SysErr  err;
+    SysErr* Error = &err;
 
     FirmwareHandle* H = (FirmwareHandle*)KMalloc(sizeof(FirmwareHandle));
     if (!H)
     {
-        PError("FirmRequest: alloc handle failed\n");
-        return -3;
+        return -BadAlloc;
     }
     memset(H, 0, sizeof(FirmwareHandle));
     H->Desc        = *__Desc__;
@@ -28,40 +29,37 @@ FirmRequest(FirmwareHandle**    __OutHandle__,
     *__OutHandle__ = H;
 
     char PathBuf[512];
-    if (FirmResolvePath(__Desc__, PathBuf, (long)sizeof(PathBuf)) != 0)
+    if (FirmResolvePath(__Desc__, PathBuf, (long)sizeof(PathBuf)) != SysOkay)
     {
-        KFree(H);
+        KFree(H, Error);
         *__OutHandle__ = 0;
-        return -4;
+        return -NotCanonical;
     }
 
     File* F = VfsOpen(PathBuf, VFlgRDONLY);
     if (!F)
     {
-        PError("FirmRequest: open failed '%s'\n", PathBuf);
-        KFree(H);
+        KFree(H, Error);
         *__OutHandle__ = 0;
-        return -69;
+        return -NoSuch;
     }
 
     VfsStat St;
-    if (VfsFstats(F, &St) != 0 || St.Size <= 0)
+    if (VfsFstats(F, &St) != SysOkay || St.Size <= 0)
     {
-        PError("FirmRequest: fstats failed '%s'\n", PathBuf);
         VfsClose(F);
-        KFree(H);
+        KFree(H, Error);
         *__OutHandle__ = 0;
-        return -67;
+        return -Limits;
     }
 
     unsigned char* Buf = (unsigned char*)KMalloc((size_t)St.Size);
     if (!Buf)
     {
-        PError("FirmRequest: alloc payload failed size=%ld\n", St.Size);
         VfsClose(F);
-        KFree(H);
+        KFree(H, Error);
         *__OutHandle__ = 0;
-        return -7;
+        return -BadAlloc;
     }
 
     long Read   = 0;
@@ -70,31 +68,32 @@ FirmRequest(FirmwareHandle**    __OutHandle__,
 
     if (RcRead != 0 || Read != St.Size)
     {
-        PError("FirmRequest: read failed rc=%d read=%ld exp=%ld\n", RcRead, Read, St.Size);
-        KFree(Buf);
-        KFree(H);
+        KFree(Buf, Error);
+        KFree(H, Error);
         *__OutHandle__ = 0;
-        return -8;
+        return -NoRead;
     }
 
     H->Blob.Data = Buf;
     H->Blob.Size = Read;
 
-    PInfo("FirmRequest: loaded '%s' size=%ld\n", PathBuf, Read);
-    return 0;
+    PSuccess("Loaded firmware module '%s' size=%ld\n", PathBuf, Read);
+    return SysOkay;
 }
 
 int
 FirmRelease(FirmwareHandle* __Handle__)
 {
+    SysErr  err;
+    SysErr* Error = &err;
     if (!__Handle__)
     {
-        return 0;
+        return SysOkay; /*already released*/
     }
     if (__Handle__->Blob.Data)
     {
-        KFree((void*)__Handle__->Blob.Data);
+        KFree((void*)__Handle__->Blob.Data, Error);
     }
-    KFree(__Handle__);
-    return 0;
+    KFree(__Handle__, Error);
+    return SysOkay;
 }

@@ -9,8 +9,7 @@ InitializeBootImage(void)
 {
     if (!LimineMod.response || LimineMod.response->module_count == 0)
     {
-        PError("RamFS: No modules provided by Limine.\n");
-        return -1;
+        return -Missing;
     }
 
     for (uint64_t I = 0; I < LimineMod.response->module_count; I++)
@@ -23,13 +22,12 @@ InitializeBootImage(void)
 
         if (strcmp(Mod->path, "/BootImg.img") == 0)
         {
-            PDebug("RamFS: Found BootImg.img at %p, size %llu bytes\n", Mod->address, Mod->size);
+            PDebug("Found BootImg.img at %p, size %llu bytes\n", Mod->address, Mod->size);
 
-            /* Hand off to BootMountRamFs to wire into VFS */
+            /* Hand off to VFS */
             return BootMountRamFs(Mod->address, Mod->size);
         }
     }
 
-    PError("RamFS: BootImg.img not found in Limine modules.\n");
-    return -3;
+    return -NoSuch;
 }

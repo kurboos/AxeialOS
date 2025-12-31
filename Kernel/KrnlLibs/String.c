@@ -2,7 +2,7 @@
 
 /*Strcpy*/
 void
-StringCopy(char* __Dest__, const char* __Src__, uint32_t __MaxLen__)
+strcpy(char* __Dest__, const char* __Src__, uint32_t __MaxLen__)
 {
     uint32_t Index = 0;
     while (__Src__[Index] && Index < (__MaxLen__ - 1))
@@ -15,7 +15,7 @@ StringCopy(char* __Dest__, const char* __Src__, uint32_t __MaxLen__)
 
 /*memcpy*/
 void*
-__builtin_memcpy(void* __Dest__, const void* __Src__, size_t __Size__)
+memcpy(void* __Dest__, const void* __Src__, size_t __Size__)
 {
     char*       Dest = __Dest__;
     const char* Src  = __Src__;

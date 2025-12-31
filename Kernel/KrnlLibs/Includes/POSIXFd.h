@@ -1,6 +1,7 @@
 #pragma once
 #include <AllTypes.h>
 #include <DevFS.h>
+#include <Errnos.h>
 #include <Sync.h>
 #include <VFS.h>
 

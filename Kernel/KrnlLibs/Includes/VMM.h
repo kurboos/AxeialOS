@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KrnPrintf.h>
 #include <PMM.h>
 
@@ -39,23 +40,23 @@ typedef struct
 
 extern VirtualMemoryManager Vmm;
 
-void                InitializeVmm(void);
+void                InitializeVmm(SysErr* __Err__);
 VirtualMemorySpace* CreateVirtualSpace(void);
-void                DestroyVirtualSpace(VirtualMemorySpace* __Space__);
+void                DestroyVirtualSpace(VirtualMemorySpace* __Space__, SysErr* __Err__);
 int                 MapPage(VirtualMemorySpace* __Space__,
                             uint64_t            __VirtAddr__,
                             uint64_t            __PhysAddr__,
                             uint64_t            __Flags__);
 int                 UnmapPage(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__);
 uint64_t            GetPhysicalAddress(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__);
-void                SwitchVirtualSpace(VirtualMemorySpace* __Space__);
+void                SwitchVirtualSpace(VirtualMemorySpace* __Space__, SysErr* __Err__);
 
 uint64_t* GetPageTable(uint64_t* __Pml4__, uint64_t __VirtAddr__, int __Level__, int __Create__);
-void      FlushTlb(uint64_t __VirtAddr__);
-void      FlushAllTlb(void);
+void      FlushTlb(uint64_t __VirtAddr__, SysErr* __Err__);
+void      FlushAllTlb(SysErr* __Err__);
 
-void VmmDumpSpace(VirtualMemorySpace* __Space__); //
-void VmmDumpStats(void);                          //
+void VmmDumpSpace(VirtualMemorySpace* __Space__, SysErr* __Err__); //
+void VmmDumpStats(SysErr* __Err__);                                //
 
 KEXPORT(InitializeVmm);
 KEXPORT(CreateVirtualSpace);

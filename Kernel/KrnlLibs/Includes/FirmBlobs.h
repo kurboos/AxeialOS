@@ -2,6 +2,7 @@
 
 #include <AllTypes.h>
 #include <DevFS.h>
+#include <Errnos.h>
 #include <KExports.h>
 
 typedef struct FirmwareBlob

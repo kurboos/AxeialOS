@@ -1,3 +1,4 @@
+#include <Errnos.h>
 #include <GDT.h>
 #include <IDT.h>
 #include <PerCPUData.h>
@@ -7,15 +8,16 @@
 void
 IsrHandler(InterruptFrame* __Frame__)
 {
-    /*Disable interrupts to prevent re-entrant exceptions during diagnostics*/
+    /*TODO: Send IPI of panic to all the APs*/
+
     __asm__ volatile("cli");
 
-    /*Get current CPU ID for SMP-aware debugging*/
+    SysErr  err;
+    SysErr* Error = &err;
+
     uint32_t CurrentCpu = GetCurrentCpuId();
 
     KrnPrintf("\n");
-
-    /*Display exception header with name, vector, and CPU information*/
     PError("EXCEPTION: %s (Vector: %lu) on CPU %u\n",
            ExceptionNames[__Frame__->IntNo],
            __Frame__->IntNo,
@@ -24,7 +26,6 @@ IsrHandler(InterruptFrame* __Frame__)
 
     KrnPrintf("\n");
 
-    /*Dump complete CPU register state at time of exception*/
     KrnPrintf("\nCPU STATE:\n");
     KrnPrintf("  RIP: 0x%016lx  RSP: 0x%016lx\n", __Frame__->Rip, __Frame__->Rsp);
     KrnPrintf("  RAX: 0x%016lx  RBX: 0x%016lx\n", __Frame__->Rax, __Frame__->Rbx);
@@ -36,12 +37,11 @@ IsrHandler(InterruptFrame* __Frame__)
     KrnPrintf("  R13: 0x%016lx  R14: 0x%016lx\n", __Frame__->R13, __Frame__->R14);
     KrnPrintf("  R15: 0x%016lx\n", __Frame__->R15);
 
-    /*Display segment registers and flags*/
     KrnPrintf("\nSEGMENT REGISTERS:\n");
     KrnPrintf("  CS: 0x%04lx  SS: 0x%04lx\n", __Frame__->Cs, __Frame__->Ss);
     KrnPrintf("  RFLAGS: 0x%016lx\n", __Frame__->Rflags);
 
-    /*Break down RFLAGS into individual flag components for easier analysis*/
+    /*Break down RFLAGS*/
     KrnPrintf("  RFLAGS: ");
     if (__Frame__->Rflags & (1 << 0))
     {
@@ -81,22 +81,15 @@ IsrHandler(InterruptFrame* __Frame__)
     }
     KrnPrintf("\n");
 
-    /*Dump CPU control registers (CR0, CR2, CR3, CR4)*/
-    DumpControlRegisters();
-
-    /*Display instruction bytes at the faulting RIP*/
-    DumpInstruction(__Frame__->Rip);
-
-    /*Dump stack contents around the stack pointer*/
+    DumpControlRegisters(Error);
+    DumpInstruction(__Frame__->Rip, Error);
     KrnPrintf("\nSTACK DUMP (64 bytes from RSP):\n");
-    DumpMemory(__Frame__->Rsp, 64);
+    DumpMemory(__Frame__->Rsp, 64, Error);
 
-    /*Generate stack trace by walking the RBP chain*/
     KrnPrintf("\nSTACK TRACE:\n");
     uint64_t* rbp = (uint64_t*)__Frame__->Rbp;
     for (int Iteration = 0; Iteration < 8 && rbp != 0; Iteration++)
     {
-        /*Validate RBP pointer to prevent crashes during stack trace*/
         if ((uint64_t)rbp < 0x1000 || (uint64_t)rbp > 0x7FFFFFFFFFFF)
         {
             break;
@@ -107,10 +100,9 @@ IsrHandler(InterruptFrame* __Frame__)
         rbp = (uint64_t*)*rbp; /* Next frame's RBP is at current RBP */
     }
 
-    /*Provide detailed analysis for specific exception types*/
     switch (__Frame__->IntNo)
     {
-        case 13: /*General Protection Fault - Most common protection violation*/
+        case 13: /*General Protection Fault*/
             KrnPrintf("\nGENERAL PROTECTION FAULT DETAILS:\n");
             if (__Frame__->ErrCode & 1)
             {
@@ -137,7 +129,7 @@ IsrHandler(InterruptFrame* __Frame__)
             KrnPrintf("  Selector Index: %lu\n", (__Frame__->ErrCode >> 3) & 0x1FFF);
             break;
 
-        case 14: /*Page Fault - Memory access violation*/
+        case 14: /*Page Fault*/
             {
                 uint64_t cr2;
                 __asm__ volatile("movq %%cr2, %0" : "=r"(cr2)); /* CR2 contains faulting address */
@@ -187,11 +179,9 @@ IsrHandler(InterruptFrame* __Frame__)
             break;
     }
 
-    /*Dump memory around the instruction pointer for context*/
     KrnPrintf("\nMEMORY AROUND RIP:\n");
-    DumpMemory(__Frame__->Rip - 32, 64);
+    DumpMemory(__Frame__->Rip - 32, 64, Error);
 
-    /*Display per-CPU descriptor table information for SMP debugging*/
     PerCpuData* CpuData = GetPerCpuData(CurrentCpu);
     if (CurrentCpu != 0)
     {
@@ -209,7 +199,6 @@ IsrHandler(InterruptFrame* __Frame__)
     KrnPrintf("\n");
     KrnPrintf("Fix your shitty code idiot.\n");
 
-    /*Halt the system indefinitely - appropriate for development/debugging*/
     while (1)
     {
         __asm__ volatile("hlt");

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Errnos.h>
 #include <Syscall.h>
 
 int64_t __Handle__Read(uint64_t __Fd__,

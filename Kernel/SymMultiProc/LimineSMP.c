@@ -1,8 +1,8 @@
-#include <LimineSMP.h>      /* Limine SMP protocol definitions */
-#include <LimineServices.h> /* Limine service interfaces */
-#include <SMP.h>            /* SMP manager and CPU structures */
-#include <Timer.h>          /* Timer functions for timeouts */
-#include <VMM.h>            /* Virtual memory management for APIC access */
+#include <LimineSMP.h>
+#include <LimineServices.h>
+#include <SMP.h>
+#include <Timer.h>
+#include <VMM.h>
 
 SmpManager        Smp;
 SpinLock          SMPLock;
@@ -29,13 +29,12 @@ GetCurrentCpuId(void)
 }
 
 void
-InitializeSmp(void)
+InitializeSmp(SysErr* __Err__)
 {
-    PInfo("SMP: Initializing using Limine support\n");
 
     if (!EarlyLimineSmp.response)
     {
-        PWarn("SMP: No SMP response from Limine, using single CPU\n");
+        PWarn("BSP only\n");
         Smp.CpuCount          = 1;
         Smp.OnlineCpus        = 1;
         Smp.BspApicId         = 0;
@@ -48,8 +47,8 @@ InitializeSmp(void)
 
     struct limine_smp_response* SmpResponse = EarlyLimineSmp.response;
 
-    PInfo("SMP: Limine detected %u CPU(s)\n", SmpResponse->cpu_count);
-    PInfo("SMP: BSP LAPIC ID: %u\n", SmpResponse->bsp_lapic_id);
+    PInfo("via Limine detected %u CPU(s)\n", SmpResponse->cpu_count);
+    PInfo("BootStrap LAPIC ID: %u\n", SmpResponse->bsp_lapic_id);
 
     Smp.CpuCount    = SmpResponse->cpu_count;
     Smp.OnlineCpus  = 1; /* BSP is already online */
@@ -76,20 +75,20 @@ InitializeSmp(void)
         {
             Smp.Cpus[Index].Status  = CPU_STATUS_ONLINE;
             Smp.Cpus[Index].Started = 1;
-            PDebug("SMP: BSP CPU %u (LAPIC ID %u)\n", Index, CpuInfo->lapic_id);
+            PDebug("BSP CPU %u (LAPIC ID %u)\n", Index, CpuInfo->lapic_id);
         }
         else
         {
             Smp.Cpus[Index].Status = CPU_STATUS_STARTING;
             CpuInfo->goto_address  = ApEntryPoint; /* Set AP entry point */
             StartedAps++;
-            PInfo("SMP: Starting AP %u (LAPIC ID %u)\n", Index, CpuInfo->lapic_id);
+            PInfo("Starting AP %u (LAPIC ID %u)\n", Index, CpuInfo->lapic_id);
         }
     }
 
     if (StartedAps > 0)
     {
-        PInfo("SMP: Waiting for %u APs to start...\n", StartedAps);
+        PInfo("Waiting for %u APs to start...\n", StartedAps);
 
 #define ApCountTimeout 99999999 /* Large timeout value for AP startup */
         uint32_t Timeout = ApCountTimeout;
@@ -102,13 +101,11 @@ InitializeSmp(void)
 
         if (CpuStartupCount > StartedAps)
         {
-            PWarn("SMP: %u out of %u APs started!\n", CpuStartupCount, StartedAps);
+            PWarn("%u out of %u APs started!\n", CpuStartupCount, StartedAps);
         }
         else
         {
-            PSuccess("SMP: %u out of %u APs started successfully\n", CpuStartupCount, StartedAps);
+            PSuccess("%u out of %u APs started successfully\n", CpuStartupCount, StartedAps);
         }
     }
-
-    PSuccess("SMP initialized: %u CPU(s) total, %u online\n", Smp.CpuCount, Smp.OnlineCpus);
 }

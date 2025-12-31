@@ -8,7 +8,21 @@
 #include <sys/times.h>
 #include <unistd.h>
 
-/*take full advantage of the newlibbbb*/
+/*
+
+
+
+
+
+    ONE HUGE NOTE: This test application is deprecated because of the kernel rewrite!
+
+
+
+
+
+*/
+
+/*take full advantage of the newlib*/
 
 #define PROT_READ     0x1
 #define PROT_WRITE    0x2

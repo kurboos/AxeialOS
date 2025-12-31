@@ -8,7 +8,7 @@ RamFSCreateNode(const char* __Name__, RamFSNodeType __Type__)
 
     if (!Node)
     {
-        return 0;
+        return Error_TO_Pointer(-BadAlloc);
     }
 
     Node->Next = 0;                                 /**< Next sibling (unused) */
@@ -27,10 +27,11 @@ RamFSCreateNode(const char* __Name__, RamFSNodeType __Type__)
 }
 
 void
-RamFSAddChild(RamFSNode* __Parent__, RamFSNode* __Child__)
+RamFSAddChild(RamFSNode* __Parent__, RamFSNode* __Child__, SysErr* __Err__)
 {
     if (!__Parent__ || !__Child__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 

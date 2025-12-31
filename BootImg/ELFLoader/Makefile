@@ -30,7 +30,7 @@ Cflg := \
 -Wno-unused-variable \
 -O2 \
 -g \
--I../../KModLibs/Includes
+-I../../Kernel/KrnlLibs/Includes
 
 FinalTemp := ../.Build
 LocalTemp := .Build

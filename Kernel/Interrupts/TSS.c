@@ -1,10 +1,11 @@
+#include <Errnos.h>
 #include <GDT.h>
 #include <SymAP.h>
 
 TaskStateSegment Tss;
 
 void
-SetTssEntry(int __Index__, uint64_t __Base__, uint32_t __Limit__)
+SetTssEntry(int __Index__, uint64_t __Base__, uint32_t __Limit__, SysErr* __Err__)
 {
     /*First entry - Main TSS descriptor with lower 32 bits of base*/
     GdtEntries[__Index__].LimitLow    = __Limit__ & 0xFFFF;
@@ -22,35 +23,31 @@ SetTssEntry(int __Index__, uint64_t __Base__, uint32_t __Limit__)
     GdtEntries[__Index__ + 1].Granularity = 0;
     GdtEntries[__Index__ + 1].BaseHigh    = 0;
 
-    /*Debug logging to verify TSS descriptor setup*/
     PDebug("TSS[%d]: Base=0x%lx, Limit=0x%x\n", __Index__, __Base__, __Limit__);
 }
 
 void
-InitializeTss(void)
+InitializeTss(SysErr* __Err__)
 {
-    /*Initialize TSS structure to all zeros*/
+    /*Defult all Zeros*/
     for (size_t Iteration = 0; Iteration < sizeof(TaskStateSegment); Iteration++)
     {
         ((uint8_t*)&Tss)[Iteration] = 0;
     }
 
-    /*Get current stack pointer for privilege level 0 stack*/
     uint64_t CurrentStack;
     __asm__ volatile("mov %%rsp, %0" : "=r"(CurrentStack));
 
-    /*Configure TSS fields for kernel operation*/
     Tss.Rsp0      = CurrentStack;             /*Stack pointer for privilege level 0*/
     Tss.IoMapBase = sizeof(TaskStateSegment); /*I/O permission bitmap offset*/
 
-    /*Add TSS descriptor to GDT (uses 2 entries)*/
-    SetTssEntry(GdtTssIndex, (uint64_t)&Tss, sizeof(TaskStateSegment) - 1);
+    SetTssEntry(GdtTssIndex, (uint64_t)&Tss, sizeof(TaskStateSegment) - 1, __Err__); /*2*/
 
     /*Store BSP TSS information in per-CPU arrays*/
     CpuTssSelectors[0]  = TssSelector;
     CpuTssStructures[0] = Tss;
 
-    /*Load TSS selector into Task Register (TR)*/
+    /*(TR)*/
     __asm__ volatile("ltr %0" : : "r"((uint16_t)TssSelector));
 
     PDebug("BSP TSS[5]: LimitLow=0x%04x, BaseLow=0x%04x, BaseMiddle=0x%02x, Access=0x%02x, "

@@ -1,69 +1,68 @@
 #include "KrnCommon.h"
+#include <Errnos.h>
 
 /** Devs */
 #define __Kernel__
 
 SpinLock TestLock;
 
+/*Worker*/
 void
 KernelWorkerThread(void* __Argument__)
 {
-    PInfo("Kernel Worker: Started on CPU %u\n", GetCurrentCpuId());
+    SysErr  err;
+    SysErr* Error = &err;
 
-    ModMemInit();
-    InitializeBootImage();
+    PInfo("[Starting post kernel init]\n");
 
-    DevFsInit();
-    Superblock* SuperBlk = DevFsMountImpl(0, 0);
-    if (!SuperBlk)
-    {
-        PError("Boot: DevFsMountImpl failed\n");
-    }
+    PInfo("Kernel Worker started on CPU %u\n", GetCurrentCpuId());
 
-    if (VfsRegisterPseudoFs("/dev", SuperBlk) != 0)
-    {
-        PError("Boot: mount devfs failed\n");
-    }
-    DevFsRegisterSeedDevices();
-
-    if (ProcFsInit() != 0)
-    {
-        PError("procfs init failed\n");
-        return;
-    }
-
-    InitRamDiskDevDrvs();
-
+    /*Testing*/
     __TEST__Proc();
 
-    /*done*/
-    ThreadExit(0);
+    PSuccess("[Post kernel init complete]\n");
+
+    /*ig this can be our idle thread???*/
+    for (;;)
+    {
+        __asm__("hlt");
+    }
 }
 
 void
 _start(void)
 {
+    SysErr  err;
+    SysErr* Error = &err;
+
     if (EarlyLimineFrambuffer.response && EarlyLimineFrambuffer.response->framebuffer_count > 0)
     {
         struct limine_framebuffer* FrameBuffer = EarlyLimineFrambuffer.response->framebuffers[0];
 
-        InitializeSpinLock(&TestLock, "TestLock");
+        /*Locks*/
+        InitializeSpinLock(&TestLock, "TestLock", Error);
+        InitializeSpinLock(&SMPLock, "SMP", Error);
 
         InitializeSerial();
 
+        /*Console*/
         if (FrameBuffer->address)
         {
             KickStartConsole(
                 (uint32_t*)FrameBuffer->address, FrameBuffer->width, FrameBuffer->height);
-            InitializeSpinLock(&ConsoleLock, "Console");
+            InitializeSpinLock(&ConsoleLock, "Console", Error);
             ClearConsole();
 
-            PInfo("AxeialOS Kernel Booting...\n");
+            PInfo("AxeKrnl Kernel Booting...\n");
         }
 
-        InitializeGdt();
-        InitializeIdt();
+        PInfo("[Starting early kernel init]\n");
 
+        /*CPU/IDT/GDT/ISR/IRQ/TSS*/
+        InitializeGdt(Error);
+        InitializeIdt(Error);
+
+        /*FPU,SSE,Floats*/
         unsigned long Cr0, Cr4;
 
         /* Read CR0 and CR4 */
@@ -83,23 +82,56 @@ _start(void)
         /* Initialize x87/SSE state */
         __asm__ volatile("fninit");
 
-        InitializePmm();
-        InitializeVmm();
-        InitializeKHeap();
+        /*Memory managers*/
+        InitializePmm(Error);
+        InitializeVmm(Error);
+        InitializeKHeap(Error);
 
-        InitializeTimer();
+        /*Timer*/
+        InitializeTimer(Error);
+
+        /*Syscall*/
         InitSyscall();
-        SetIdtEntry(0x80, (uint64_t)SysEntASM, KernelCodeSelector, 0xEE);
-        InitializeThreadManager();
-        InitializeSpinLock(&SMPLock, "SMP");
-        InitializeSmp();
-        InitializeScheduler();
+        SetIdtEntry(0x80, (uint64_t)SysEntASM, KernelCodeSelector, 0xEE, Error);
+
+        /*Threading/SMP*/
+        InitializeSmp(Error);
+        InitializeThreadManager(Error);
+        InitializeScheduler(Error);
+
+        /*Modules*/
+        ModMemInit(Error);
+        InitializeBootImage();
+
+        /*Udev/Devfs*/
+        DevFsInit();
+        Superblock* SuperBlk = DevFsMountImpl(0, 0);
+        if (!SuperBlk)
+        {
+            PError("devfs failed\n");
+        }
+
+        if (VfsRegisterPseudoFs("/dev", SuperBlk) != SysOkay)
+        {
+            PError("mount udev/devfs failed\n");
+        }
+        DevFsRegisterSeedDevices();
+
+        /*Procfs*/
+        if (ProcFsInit() != SysOkay)
+        {
+            PError("procfs init failed\n");
+        }
+
+        PSuccess("[Early kernel init complete]\n");
+
+        /*Kernel worker*/
 
         Thread* KernelWorker =
             CreateThread(ThreadTypeKernel, KernelWorkerThread, NULL, ThreadPrioritykernel);
         if (KernelWorker)
         {
-            ThreadExecute(KernelWorker);
+            ThreadExecute(KernelWorker, Error);
             PSuccess("Ctl Transfer to Worker\n");
         }
     }

@@ -6,7 +6,6 @@
 #include <AxeThreads.h>
 #include <BootConsole.h>
 #include <BootImg.h>
-#include <CharBus.h>
 #include <DevFS.h>
 #include <EarlyBootFB.h>
 #include <GDT.h>

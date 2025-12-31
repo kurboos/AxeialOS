@@ -1,5 +1,19 @@
 #include "Pci.h"
 
+/*
+
+
+
+
+
+    ONE HUGE NOTE: This driver is deprecated because of the kernel rewrite!
+
+
+
+
+
+*/
+
 int
 PciOpen(void* __CtrlCtx__)
 {

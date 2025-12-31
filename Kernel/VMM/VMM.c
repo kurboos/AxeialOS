@@ -3,23 +3,21 @@
 VirtualMemoryManager Vmm = {0};
 
 void
-InitializeVmm(void)
+InitializeVmm(SysErr* __Err__)
 {
-    PInfo("Initializing Virtual Memory Manager...\n");
-
     Vmm.HhdmOffset = Pmm.HhdmOffset;
-    PDebug("Using HHDM offset: 0x%016lx\n", Vmm.HhdmOffset);
+    PDebug("HHDM offset: 0x%016lx\n", Vmm.HhdmOffset);
 
     uint64_t CurrentCr3;
     __asm__ volatile("mov %%cr3, %0" : "=r"(CurrentCr3));
     Vmm.KernelPml4Physical = CurrentCr3 & 0xFFFFFFFFFFFFF000ULL; /* Clear lower 12 bits */
 
-    PDebug("Current PML4 at: 0x%016lx\n", Vmm.KernelPml4Physical);
+    PDebug("Present PML4 at: 0x%016lx\n", Vmm.KernelPml4Physical);
 
     Vmm.KernelSpace = (VirtualMemorySpace*)PhysToVirt(AllocPage());
     if (!Vmm.KernelSpace)
     {
-        PError("Failed to allocate kernel virtual space\n");
+        SlotError(__Err__, -NotCanonical);
         return;
     }
 
@@ -28,7 +26,7 @@ InitializeVmm(void)
         (uint64_t*)PhysToVirt(Vmm.KernelPml4Physical); /* Virtual address for PML4 */
     Vmm.KernelSpace->RefCount = 1;                     /* Initialize reference count */
 
-    PSuccess("VMM initialized with kernel space at 0x%016lx\n", Vmm.KernelPml4Physical);
+    PSuccess("VMM active with Kernel space at 0x%016lx\n", Vmm.KernelPml4Physical);
 }
 
 VirtualMemorySpace*
@@ -36,31 +34,30 @@ CreateVirtualSpace(void)
 {
     if (!Vmm.KernelSpace || !Vmm.KernelSpace->Pml4)
     {
-        PError("VMM not properly initialized\n");
-        return 0;
+        return Error_TO_Pointer(-NotCanonical);
     }
 
     uint64_t SpacePhys = AllocPage();
     if (!SpacePhys)
     {
-        PError("Failed to allocate virtual space structure\n");
-        return 0;
+        return Error_TO_Pointer(-NotCanonical);
     }
+
+    SysErr  err;
+    SysErr* Error = &err;
 
     VirtualMemorySpace* Space = (VirtualMemorySpace*)PhysToVirt(SpacePhys);
     if (!Space)
     {
-        PError("HHDM conversion failed for space structure\n");
-        FreePage(SpacePhys);
-        return 0;
+        FreePage(SpacePhys, Error);
+        return Error_TO_Pointer(-NotCanonical);
     }
 
     uint64_t Pml4Phys = AllocPage();
     if (!Pml4Phys)
     {
-        PError("Failed to allocate PML4\n");
-        FreePage(SpacePhys);
-        return 0;
+        FreePage(SpacePhys, Error);
+        return Error_TO_Pointer(-NotCanonical);
     }
 
     Space->PhysicalBase = Pml4Phys;
@@ -69,10 +66,9 @@ CreateVirtualSpace(void)
 
     if (!Space->Pml4)
     {
-        PError("HHDM conversion failed for PML4\n");
-        FreePage(SpacePhys);
-        FreePage(Pml4Phys);
-        return 0;
+        FreePage(SpacePhys, Error);
+        FreePage(Pml4Phys, Error);
+        return Error_TO_Pointer(-NotCanonical);
     }
 
     for (uint64_t Index = 0; Index < PageTableEntries; Index++)
@@ -90,17 +86,21 @@ CreateVirtualSpace(void)
 }
 
 void
-DestroyVirtualSpace(VirtualMemorySpace* __Space__)
+DestroyVirtualSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
 {
     if (!__Space__ || __Space__ == Vmm.KernelSpace)
     {
-        PWarn("Cannot destroy kernel space or null space\n");
+        SlotError(__Err__, -NotCanonical);
         return;
     }
+
+    SysErr  err;
+    SysErr* Error = &err;
 
     __Space__->RefCount--;
     if (__Space__->RefCount > 0)
     {
+        SlotError(__Err__, -Dangling);
         PDebug("Virtual space still has %u references\n", __Space__->RefCount);
         return;
     }
@@ -143,23 +143,21 @@ DestroyVirtualSpace(VirtualMemorySpace* __Space__)
                     continue;
                 }
 
-                FreePage(Pd[PdIndex] & 0x000FFFFFFFFFF000ULL);
+                FreePage(Pd[PdIndex] & 0x000FFFFFFFFFF000ULL, Error);
             }
 
             /* Free the Page Directory page itself */
-            FreePage(PdPhys);
+            FreePage(PdPhys, Error);
         }
 
         /* Free the Page Directory Pointer Table page */
-        FreePage(PdptPhys);
+        FreePage(PdptPhys, Error);
     }
 
     /* Free the root Page Map Level 4 table */
-    FreePage(__Space__->PhysicalBase);
+    FreePage(__Space__->PhysicalBase, Error);
 
-    FreePage(VirtToPhys(__Space__));
-
-    PDebug("Virtual space destroyed\n");
+    FreePage(VirtToPhys(__Space__), Error);
 }
 
 int
@@ -170,21 +168,18 @@ MapPage(VirtualMemorySpace* __Space__,
 {
     if (!__Space__ || (__VirtAddr__ % PageSize) != 0 || (__PhysAddr__ % PageSize) != 0)
     {
-        PError("Invalid parameters for MapPage\n");
-        return 0;
+        return -BadArgs;
     }
 
     if (__PhysAddr__ > 0x000FFFFFFFFFF000ULL)
     {
-        PError("Physical address too high: 0x%016lx\n", __PhysAddr__);
-        return 0;
+        return -NotCanonical;
     }
 
     uint64_t* Pt = GetPageTable(__Space__->Pml4, __VirtAddr__, 1, 1);
     if (!Pt)
     {
-        PError("Failed to get page table for mapping\n");
-        return 0;
+        return -NotCanonical;
     }
 
     uint64_t PtIndex = (__VirtAddr__ >> 12) & 0x1FF;
@@ -192,15 +187,17 @@ MapPage(VirtualMemorySpace* __Space__,
     if (Pt[PtIndex] & PTEPRESENT)
     {
         PDebug("Page already mapped at 0x%016lx\n", __VirtAddr__);
-        return 1;
+        return SysOkay;
     }
 
     Pt[PtIndex] = (__PhysAddr__ & 0x000FFFFFFFFFF000ULL) | __Flags__ | PTEPRESENT;
 
-    FlushTlb(__VirtAddr__);
+    SysErr  err;
+    SysErr* Error = &err;
+    FlushTlb(__VirtAddr__, Error);
 
     PDebug("Mapped 0x%016lx -> 0x%016lx (flags=0x%lx)\n", __VirtAddr__, __PhysAddr__, __Flags__);
-    return 1;
+    return SysOkay;
 }
 
 int
@@ -208,15 +205,13 @@ UnmapPage(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 {
     if (!__Space__ || (__VirtAddr__ % PageSize) != 0)
     {
-        PError("Invalid parameters for UnmapPage\n");
-        return 0;
+        return -BadArgs;
     }
 
     uint64_t* Pt = GetPageTable(__Space__->Pml4, __VirtAddr__, 1, 0);
     if (!Pt)
     {
-        PWarn("No page table for address 0x%016lx\n", __VirtAddr__);
-        return 0;
+        return -NotCanonical;
     }
 
     /* Calculate the page table index for this virtual address */
@@ -224,17 +219,17 @@ UnmapPage(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 
     if (!(Pt[PtIndex] & PTEPRESENT))
     {
-        PWarn("Page not mapped at 0x%016lx\n", __VirtAddr__);
-        return 0;
+        return -Dangling;
     }
 
     Pt[PtIndex] = 0;
 
-    FlushTlb(__VirtAddr__);
+    SysErr  err;
+    SysErr* Error = &err;
+    FlushTlb(__VirtAddr__, Error);
 
-    /* Log the successful unmapping operation */
     PDebug("Unmapped 0x%016lx\n", __VirtAddr__);
-    return 1;
+    return SysOkay;
 }
 
 uint64_t
@@ -242,14 +237,13 @@ GetPhysicalAddress(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 {
     if (!__Space__)
     {
-        PError("Invalid space for GetPhysicalAddress\n");
-        return 0;
+        return -NotCanonical;
     }
 
     uint64_t* Pt = GetPageTable(__Space__->Pml4, __VirtAddr__, 1, 0);
     if (!Pt)
     {
-        return 0;
+        return -NotCanonical;
     }
 
     /* Calculate the index in the page table */
@@ -257,7 +251,7 @@ GetPhysicalAddress(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 
     if (!(Pt[PtIndex] & PTEPRESENT))
     {
-        return 0;
+        return -Dangling;
     }
 
     uint64_t PhysBase = Pt[PtIndex] & 0x000FFFFFFFFFF000ULL;
@@ -268,11 +262,11 @@ GetPhysicalAddress(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 }
 
 void
-SwitchVirtualSpace(VirtualMemorySpace* __Space__)
+SwitchVirtualSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
 {
     if (!__Space__)
     {
-        PError("Cannot switch to null virtual space\n");
+        SlotError(__Err__, -NotCanonical);
         return;
     }
 

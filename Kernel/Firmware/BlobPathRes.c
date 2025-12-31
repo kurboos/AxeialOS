@@ -6,8 +6,7 @@ FirmResolvePath(const FirmwareDesc* __Desc__, char* __OutPath__, long __OutLen__
 {
     if (!__Desc__ || !__Desc__->Name || !__OutPath__ || __OutLen__ <= 0)
     {
-        PError("FirmResolvePath: invalid args\n");
-        return -1;
+        return -BadArgs;
     }
 
     const char* Prefix = 0;
@@ -25,23 +24,20 @@ FirmResolvePath(const FirmwareDesc* __Desc__, char* __OutPath__, long __OutLen__
             }
         default:
             {
-                PError("FirmResolvePath: bad origin\n");
-                return -2;
+                return -NotCanonical;
             }
     }
 
     char tmp[512];
-    if (VfsJoinPath(Prefix, __Desc__->Name, tmp, (long)sizeof(tmp)) != 0)
+    if (VfsJoinPath(Prefix, __Desc__->Name, tmp, (long)sizeof(tmp)) != SysOkay)
     {
-        PError("FirmResolvePath: join failed\n");
-        return -3;
+        return -NotCanonical;
     }
 
-    if (VfsRealpath(tmp, __OutPath__, __OutLen__) != 0)
+    if (VfsRealpath(tmp, __OutPath__, __OutLen__) != SysOkay)
     {
-        PError("FirmResolvePath: realpath failed '%s'\n", tmp);
-        return -4;
+        return -NotCanonical;
     }
 
-    return 0;
+    return SysOkay;
 }

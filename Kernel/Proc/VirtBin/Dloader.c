@@ -16,10 +16,10 @@ DynLoaderRegister(const DynLoader* __Loader__)
 {
     if (!__Loader__ || __Count__ >= MaxLoaders)
     {
-        return -1;
+        return -BadArgs;
     }
     __Loaders__[__Count__++] = __Loader__;
-    return 0;
+    return SysOkay;
 }
 
 int
@@ -38,10 +38,10 @@ DynLoaderUnregister(const char* __Name__)
             }
             __Loaders__[__Count__ - 1] = NULL;
             __Count__--;
-            return 0;
+            return SysOkay;
         }
     }
-    return -1;
+    return -NoSuch;
 }
 
 const DynLoader*
@@ -51,10 +51,10 @@ DynLoaderSelect(File* __File__)
     for (I = 0; I < __Count__; I++)
     {
         const DynLoader* L = __Loaders__[I];
-        if (L && L->Ops.Probe && L->Ops.Probe(__File__) == 0)
+        if (L && L->Ops.Probe && L->Ops.Probe(__File__) == SysOkay)
         {
             return L;
         }
     }
-    return NULL;
+    return Error_TO_Pointer(-NoSuch);
 }

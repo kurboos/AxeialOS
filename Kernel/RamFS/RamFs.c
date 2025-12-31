@@ -13,14 +13,17 @@ RamFSAttachPath(RamFSNode*     __Root__,
                 const uint8_t* __Data__,
                 uint32_t       __Size__)
 {
+    SysErr  err;
+    SysErr* Error = &err;
+
     if (!__Root__ || !__FullPath__)
     {
-        return 0;
+        return Error_TO_Pointer(-NotCanonical);
     }
 
     if (__FullPath__[0] != '/')
     {
-        return 0;
+        return Error_TO_Pointer(-NotRooted);
     }
 
     const char* PathSegment = __FullPath__;
@@ -68,7 +71,7 @@ RamFSAttachPath(RamFSNode*     __Root__,
                 char* Name = (char*)KMalloc(SegLen + 1);
                 if (!Name)
                 {
-                    return 0;
+                    return Error_TO_Pointer(-BadAlloc);
                 }
 
                 for (uint32_t I = 0; I < SegLen; I++)
@@ -80,10 +83,10 @@ RamFSAttachPath(RamFSNode*     __Root__,
                 Next = RamFSCreateNode(Name, RamFSNode_Directory);
                 if (!Next)
                 {
-                    return 0;
+                    return Error_TO_Pointer(-BadAlloc);
                 }
 
-                RamFSAddChild(Cur, Next);
+                RamFSAddChild(Cur, Next, Error);
             }
 
             Cur = Next;
@@ -127,7 +130,7 @@ RamFSAttachPath(RamFSNode*     __Root__,
         char* Name = (char*)KMalloc(LeafLen + 1);
         if (!Name)
         {
-            return 0;
+            return Error_TO_Pointer(-BadAlloc);
         }
 
         for (uint32_t I = 0; I < LeafLen; I++)
@@ -139,10 +142,10 @@ RamFSAttachPath(RamFSNode*     __Root__,
         Leaf = RamFSCreateNode(Name, __Type__);
         if (!Leaf)
         {
-            return 0;
+            return Error_TO_Pointer(-BadAlloc);
         }
 
-        RamFSAddChild(Cur, Leaf);
+        RamFSAddChild(Cur, Leaf, Error);
     }
 
     if (__Type__ == RamFSNode_File)
@@ -160,7 +163,7 @@ RamFSMount(const void* __Image__, size_t __Length__)
     RamFSNode* Root = RamFSEnsureRoot();
     if (!Root || !__Image__ || __Length__ == 0)
     {
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
 
     const uint8_t* Buf = (const uint8_t*)__Image__;
@@ -263,7 +266,7 @@ RamFSMount(const void* __Image__, size_t __Length__)
         char* FullPath = (char*)KMalloc(RawLen + 2);
         if (!FullPath)
         {
-            return 0;
+            return Error_TO_Pointer(-NotCanonical);
         }
 
         FullPath[0] = '/';
@@ -285,7 +288,7 @@ RamFSLookup(RamFSNode* __Root__, const char* __Path__)
 {
     if (!__Root__ || !__Path__ || __Path__[0] != '/')
     {
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
 
     const char* PathSegment = __Path__;
@@ -327,7 +330,8 @@ RamFSLookup(RamFSNode* __Root__, const char* __Path__)
 
             if (!Next)
             {
-                return 0;
+                return Error_TO_Pointer(-Dangling);
+                ;
             }
 
             Cur = Next;
@@ -362,5 +366,6 @@ RamFSLookup(RamFSNode* __Root__, const char* __Path__)
         }
     }
 
-    return 0;
+    return Error_TO_Pointer(-NoSuch);
+    ;
 }

@@ -15,17 +15,13 @@ Thread*         CurrentThreads[MaxCPUs];
 static SpinLock CurrentThreadLock; /*Mutexes would have been fine ig*/
 
 void
-InitializeThreadManager(void)
+InitializeThreadManager(SysErr* __Err__)
 {
-    InitializeSpinLock(&ThreadListLock, "ThreadList");
-    InitializeSpinLock(&CurrentThreadLock, "CurrentThread");
+    InitializeSpinLock(&ThreadListLock, "ThreadList", __Err__);
+    InitializeSpinLock(&CurrentThreadLock, "CurrentThread", __Err__);
     NextThreadId = 1;
     ThreadList   = NULL;
 
-    /*
-     * Initialize current threads array to NULL for all CPUs.
-     * This prevents accessing invalid thread pointers on startup.
-     */
     for (uint32_t CpuIndex = 0; CpuIndex < MaxCPUs; CpuIndex++)
     {
         CurrentThreads[CpuIndex] = NULL;
@@ -45,27 +41,31 @@ GetCurrentThread(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
     {
-        return NULL;
+        return Error_TO_Pointer(-Limits);
     }
 
-    AcquireSpinLock(&CurrentThreadLock);
+    SysErr  err;
+    SysErr* Error = &err;
+
+    AcquireSpinLock(&CurrentThreadLock, Error);
     Thread* Result = CurrentThreads[__CpuId__];
-    ReleaseSpinLock(&CurrentThreadLock);
+    ReleaseSpinLock(&CurrentThreadLock, Error);
 
     return Result;
 }
 
 void
-SetCurrentThread(uint32_t __CpuId__, Thread* __ThreadPtr__)
+SetCurrentThread(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__)
 {
     if (__CpuId__ >= MaxCPUs)
     {
+        SlotError(__Err__, -Limits);
         return;
     }
 
-    AcquireSpinLock(&CurrentThreadLock);
+    AcquireSpinLock(&CurrentThreadLock, __Err__);
     CurrentThreads[__CpuId__] = __ThreadPtr__;
-    ReleaseSpinLock(&CurrentThreadLock);
+    ReleaseSpinLock(&CurrentThreadLock, __Err__);
 }
 
 Thread*
@@ -74,54 +74,41 @@ CreateThread(ThreadType     __Type__,
              void*          __Argument__,
              ThreadPriority __Priority__)
 {
-    PDebug("CreateThread: Entry - Type=%u, EntryPoint=%p, Arg=%p\n",
-           __Type__,
-           __EntryPoint__,
-           __Argument__);
-
-    PDebug("CreateThread: About to allocate TCB (size=%zu)\n", sizeof(Thread));
+    SysErr  err;
+    SysErr* Error     = &err;
     Thread* NewThread = (Thread*)KMalloc(sizeof(Thread));
     if (!NewThread)
     {
-        PError("CreateThread: Failed to allocate thread\n");
-        ReleaseSpinLock(&ThreadListLock);
-        return NULL;
+        ReleaseSpinLock(&ThreadListLock, Error);
+        return Error_TO_Pointer(-BadAlloc);
     }
-    PDebug("CreateThread: TCB allocated at %p\n", NewThread);
+    PDebug("TCB allocated at %p\n", NewThread);
 
-    PDebug("CreateThread: Clearing TCB\n");
     for (size_t Index = 0; Index < sizeof(Thread); Index++)
     {
         ((uint8_t*)NewThread)[Index] = 0;
     }
-    PDebug("CreateThread: TCB cleared\n");
 
-    PDebug("CreateThread: Allocating thread ID\n");
     NewThread->ThreadId = AllocateThreadId();
-    PDebug("CreateThread: Thread ID allocated: %u\n", NewThread->ThreadId);
+    PDebug("Thread ID allocated: %u\n", NewThread->ThreadId);
 
     NewThread->ProcessId    = 1;
     NewThread->State        = ThreadStateReady;
     NewThread->Type         = __Type__;
     NewThread->Priority     = __Priority__;
     NewThread->BasePriority = __Priority__;
-    PDebug("CreateThread: Core fields initialized\n");
-
-    PDebug("CreateThread: Setting thread name\n");
     KrnPrintf(NewThread->Name, "Thread-%u", NewThread->ThreadId);
-    PDebug("CreateThread: Thread name set to: %s\n", NewThread->Name);
+    PDebug("Thread name set to: %s\n", NewThread->Name);
 
-    PDebug("CreateThread: About to allocate stacks\n");
+    /*ring 0*/
     if (__Type__ == ThreadTypeKernel)
     {
-        PDebug("CreateThread: Allocating kernel stack (8192 bytes)\n");
         void* KernelStackBase = KMalloc(8192);
         if (!KernelStackBase)
         {
-            PError("CreateThread: Failed to allocate kernel stack\n");
-            KFree(NewThread);
-            ReleaseSpinLock(&ThreadListLock);
-            return NULL;
+            KFree(NewThread, Error);
+            ReleaseSpinLock(&ThreadListLock, Error);
+            return Error_TO_Pointer(-BadAlloc);
         }
         NewThread->KernelStack =
             (uint64_t)KernelStackBase + 8192; /** Stack grows downwards; store top */
@@ -131,43 +118,46 @@ CreateThread(ThreadType     __Type__,
                KernelStackBase,
                (void*)NewThread->KernelStack);
     }
+
+    /*ring 3*/
     else
     {
-        PDebug("CreateThread: Allocating kernel and user stacks\n");
         void* KernelStackBase = KMalloc(8192);
         void* UserStackBase   = KMalloc(8192);
         if (!KernelStackBase || !UserStackBase)
         {
-            PError("CreateThread: Failed to allocate stacks\n");
             if (KernelStackBase)
             {
-                KFree(KernelStackBase);
+                KFree(KernelStackBase, Error);
             }
             if (UserStackBase)
             {
-                KFree(UserStackBase);
+                KFree(UserStackBase, Error);
             }
-            KFree(NewThread);
-            ReleaseSpinLock(&ThreadListLock);
-            return NULL;
+            KFree(NewThread, Error);
+            ReleaseSpinLock(&ThreadListLock, Error);
+            return Error_TO_Pointer(-BadAlloc);
         }
         NewThread->KernelStack = (uint64_t)KernelStackBase + 8192;
         NewThread->UserStack   = (uint64_t)UserStackBase + 8192;
         NewThread->StackSize   = 8192;
-        PDebug("CreateThread: Stacks allocated - Kernel: %p, User: %p\n",
+        PDebug("Stacks allocated - Kernel: %p, User: %p\n",
                (void*)NewThread->KernelStack,
                (void*)NewThread->UserStack);
     }
 
-    PDebug("CreateThread: Initializing thread context\n");
     NewThread->Context.Rip    = (uint64_t)__EntryPoint__;
     NewThread->Context.Rsp    = (NewThread->KernelStack & ~0xFULL) - 16;
     NewThread->Context.Rflags = 0x202;
+
+    /*ring0*/
     if (__Type__ == ThreadTypeKernel)
     {
         NewThread->Context.Cs = KernelCodeSelector;
         NewThread->Context.Ss = KernelDataSelector;
     }
+
+    /*ring3*/
     else
     {
         NewThread->Context.Cs  = UserCodeSelector;
@@ -180,54 +170,47 @@ CreateThread(ThreadType     __Type__,
     NewThread->Context.Fs  = NewThread->Context.Ss;
     NewThread->Context.Gs  = NewThread->Context.Ss;
     NewThread->Context.Rdi = (uint64_t)__Argument__;
-    PDebug("CreateThread: Context initialized - RIP=%p, RSP=%p\n",
-           (void*)NewThread->Context.Rip,
-           (void*)NewThread->Context.Rsp);
-
-    PDebug("CreateThread: Initializing scheduling fields\n");
-    NewThread->CpuAffinity = 0xFFFFFFFF;
-    NewThread->LastCpu     = 0xFFFFFFFF;
-    NewThread->TimeSlice   = 10;
-    NewThread->Cooldown    = 0;
-    PDebug("CreateThread: About to call GetSystemTicks\n");
+    PDebug("RIP=%p, RSP=%p\n", (void*)NewThread->Context.Rip, (void*)NewThread->Context.Rsp);
+    NewThread->CpuAffinity  = 0xFFFFFFFF;
+    NewThread->LastCpu      = 0xFFFFFFFF;
+    NewThread->TimeSlice    = 10;
+    NewThread->Cooldown     = 0;
     NewThread->StartTime    = GetSystemTicks();
     NewThread->CreationTick = GetSystemTicks();
-    PDebug("CreateThread: System ticks retrieved\n");
-    NewThread->WaitReason = WaitReasonNone;
+    NewThread->WaitReason   = WaitReasonNone;
 
     NewThread->PageDirectory = 0;
     NewThread->VirtualBase   = UserVirtualBase;
     NewThread->MemoryUsage   = (NewThread->StackSize * 2) / 1024;
-    PDebug("CreateThread: Scheduling and memory fields initialized\n");
 
-    PDebug("CreateThread: Adding to thread list (current head: %p)\n", ThreadList);
+    PDebug("current head: %p\n", ThreadList);
     NewThread->Next = ThreadList;
     if (ThreadList)
     {
         ThreadList->Prev = NewThread;
     }
     ThreadList = NewThread;
-    PDebug("CreateThread: Added to thread list (new head: %p)\n", ThreadList);
+    PDebug("new head: %p\n", ThreadList);
 
     PDebug("Created thread %u (%s)\n",
            NewThread->ThreadId,
            __Type__ == ThreadTypeKernel ? "Kernel" : "User");
-    PDebug("CreateThread: Returning thread %p\n", NewThread);
 
     return NewThread;
 }
 
 void
-DestroyThread(Thread* __ThreadPtr__)
+DestroyThread(Thread* __ThreadPtr__, SysErr* __Err__)
 {
     if (!__ThreadPtr__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
     __ThreadPtr__->State = ThreadStateTerminated;
 
-    AcquireSpinLock(&ThreadListLock);
+    AcquireSpinLock(&ThreadListLock, __Err__);
 
     if (__ThreadPtr__->Prev)
     {
@@ -243,32 +226,33 @@ DestroyThread(Thread* __ThreadPtr__)
         __ThreadPtr__->Next->Prev = __ThreadPtr__->Prev;
     }
 
-    ReleaseSpinLock(&ThreadListLock);
+    ReleaseSpinLock(&ThreadListLock, __Err__);
 
     if (__ThreadPtr__->KernelStack)
     {
-        KFree((void*)(__ThreadPtr__->KernelStack - __ThreadPtr__->StackSize));
+        KFree((void*)(__ThreadPtr__->KernelStack - __ThreadPtr__->StackSize), __Err__);
     }
 
     if (__ThreadPtr__->UserStack)
     {
-        KFree((void*)(__ThreadPtr__->UserStack - __ThreadPtr__->StackSize));
+        KFree((void*)(__ThreadPtr__->UserStack - __ThreadPtr__->StackSize), __Err__);
     }
 
-    KFree(__ThreadPtr__);
+    KFree(__ThreadPtr__, __Err__);
 
     PDebug("Destroyed thread %u\n", __ThreadPtr__->ThreadId);
 }
 
 void
-SuspendThread(Thread* __ThreadPtr__)
+SuspendThread(Thread* __ThreadPtr__, SysErr* __Err__)
 {
     if (!__ThreadPtr__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
-    AcquireSpinLock(&ThreadListLock);
+    AcquireSpinLock(&ThreadListLock, __Err__);
 
     __ThreadPtr__->Flags |= ThreadFlagSuspended;
 
@@ -278,16 +262,17 @@ SuspendThread(Thread* __ThreadPtr__)
         __ThreadPtr__->WaitReason = WaitReasonNone;
     }
 
-    ReleaseSpinLock(&ThreadListLock);
+    ReleaseSpinLock(&ThreadListLock, __Err__);
 
     PDebug("Suspended thread %u\n", __ThreadPtr__->ThreadId);
 }
 
 void
-ResumeThread(Thread* __ThreadPtr__)
+ResumeThread(Thread* __ThreadPtr__, SysErr* __Err__)
 {
     if (!__ThreadPtr__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
@@ -302,10 +287,11 @@ ResumeThread(Thread* __ThreadPtr__)
 }
 
 void
-SetThreadPriority(Thread* __ThreadPtr__, ThreadPriority __Priority__)
+SetThreadPriority(Thread* __ThreadPtr__, ThreadPriority __Priority__, SysErr* __Err__)
 {
     if (!__ThreadPtr__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
@@ -315,10 +301,11 @@ SetThreadPriority(Thread* __ThreadPtr__, ThreadPriority __Priority__)
 }
 
 void
-SetThreadAffinity(Thread* __ThreadPtr__, uint32_t __CpuMask__)
+SetThreadAffinity(Thread* __ThreadPtr__, uint32_t __CpuMask__, SysErr* __Err__)
 {
     if (!__ThreadPtr__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
@@ -332,7 +319,7 @@ GetCpuLoad(uint32_t __CpuId__)
 {
     if (__CpuId__ >= MaxCPUs)
     {
-        return 0xFFFFFFFF; /* Invalid CPU indicator */
+        return 0xFFFFFFFF; /* Bad CPU indicator */
     }
 
     return GetCpuReadyCount(__CpuId__);
@@ -362,7 +349,7 @@ CalculateOptimalCpu(Thread* __ThreadPtr__)
 {
     if (!__ThreadPtr__)
     {
-        return 0;
+        return Nothing;
     }
 
     if (__ThreadPtr__->CpuAffinity != 0xFFFFFFFF)
@@ -385,43 +372,44 @@ CalculateOptimalCpu(Thread* __ThreadPtr__)
             }
         }
 
-        return FoundValidCpu ? BestCpu : 0;
+        return FoundValidCpu ? BestCpu : Nothing;
     }
 
     return FindLeastLoadedCpu();
 }
 
 void
-ThreadExecute(Thread* __ThreadPtr__)
+ThreadExecute(Thread* __ThreadPtr__, SysErr* __Err__)
 {
     if (!__ThreadPtr__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
     /* Determine best CPU for this thread */
     uint32_t TargetCpu = CalculateOptimalCpu(__ThreadPtr__);
 
-    /* Update thread's last CPU assignment */
-    AcquireSpinLock(&ThreadListLock);
+    AcquireSpinLock(&ThreadListLock, __Err__);
     __ThreadPtr__->LastCpu = TargetCpu;
     __ThreadPtr__->State   = ThreadStateReady;
-    ReleaseSpinLock(&ThreadListLock);
+    ReleaseSpinLock(&ThreadListLock, __Err__);
 
-    /* Enqueue thread in target CPU’s ready queue */
-    AddThreadToReadyQueue(TargetCpu, __ThreadPtr__);
+    /* Enqueue thread */
+    AddThreadToReadyQueue(TargetCpu, __ThreadPtr__, __Err__);
 
-    PDebug("ThreadExecute: Thread %u assigned to CPU %u (Load: %u)\n",
+    PDebug("Thread %u assigned to CPU %u (Load: %u)\n",
            __ThreadPtr__->ThreadId,
            TargetCpu,
            GetCpuLoad(TargetCpu));
 }
 
 void
-ThreadExecuteMultiple(Thread** __ThreadArray__, uint32_t __ThreadCount__)
+ThreadExecuteMultiple(Thread** __ThreadArray__, uint32_t __ThreadCount__, SysErr* __Err__)
 {
     if (!__ThreadArray__ || __ThreadCount__ == 0)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
@@ -434,13 +422,13 @@ ThreadExecuteMultiple(Thread** __ThreadArray__, uint32_t __ThreadCount__)
         }
 
         uint32_t TargetCpu = CalculateOptimalCpu(ThreadPtr);
-        AcquireSpinLock(&ThreadListLock);
+        AcquireSpinLock(&ThreadListLock, __Err__);
         ThreadPtr->LastCpu = TargetCpu;
         ThreadPtr->State   = ThreadStateReady;
-        ReleaseSpinLock(&ThreadListLock);
-        AddThreadToReadyQueue(TargetCpu, ThreadPtr);
+        ReleaseSpinLock(&ThreadListLock, __Err__);
+        AddThreadToReadyQueue(TargetCpu, ThreadPtr, __Err__);
 
-        PDebug("ThreadExecuteMultiple: Thread %u \u2192 CPU %u (Load: %u)\n",
+        PDebug("Thread %u \u2192 CPU %u (Load: %u)\n",
                ThreadPtr->ThreadId,
                TargetCpu,
                GetCpuLoad(TargetCpu));
@@ -448,7 +436,7 @@ ThreadExecuteMultiple(Thread** __ThreadArray__, uint32_t __ThreadCount__)
 }
 
 void
-LoadBalanceThreads(void)
+LoadBalanceThreads(SysErr* __Err__)
 {
     uint32_t CpuLoads[MaxCPUs];
     uint32_t MaxLoad = 0;
@@ -480,34 +468,32 @@ LoadBalanceThreads(void)
         Thread* ThreadToMigrate = GetNextThread(MaxCpu);
         if (ThreadToMigrate)
         {
-            /* Check if thread's affinity allows migration */
             if (ThreadToMigrate->CpuAffinity == 0xFFFFFFFF ||
                 (ThreadToMigrate->CpuAffinity & (1 << MinCpu)))
             {
                 ThreadToMigrate->LastCpu = MinCpu;
-                AddThreadToReadyQueue(MinCpu, ThreadToMigrate);
+                AddThreadToReadyQueue(MinCpu, ThreadToMigrate, __Err__);
 
-                PDebug("LoadBalance: Migrated Thread %u from CPU %u to CPU %u\n",
+                PDebug("Migrated Thread %u from CPU %u to CPU %u\n",
                        ThreadToMigrate->ThreadId,
                        MaxCpu,
                        MinCpu);
             }
             else
             {
-                PWarn("Migration Failed\n");
-
                 /* Put thread back into original CPU’s ready queue if migration failed */
-                AddThreadToReadyQueue(MaxCpu, ThreadToMigrate);
+                AddThreadToReadyQueue(MaxCpu, ThreadToMigrate, __Err__);
             }
         }
     }
 }
 
 void
-GetSystemLoadStats(uint32_t* __TotalThreads__,
-                   uint32_t* __AverageLoad__,
-                   uint32_t* __MaxLoad__,
-                   uint32_t* __MinLoad__)
+GetSystemLoadStats(uint32_t*       __TotalThreads__,
+                   uint32_t*       __AverageLoad__,
+                   uint32_t*       __MaxLoad__,
+                   uint32_t*       __MinLoad__,
+                   SysErr* __Err__ _unused)
 {
     uint32_t TotalLoad = 0;
     uint32_t MaxLoad   = 0;
@@ -539,7 +525,7 @@ GetSystemLoadStats(uint32_t* __TotalThreads__,
     }
     if (__AverageLoad__)
     {
-        *__AverageLoad__ = (Smp.CpuCount > 0) ? TotalLoad / Smp.CpuCount : 0;
+        *__AverageLoad__ = (Smp.CpuCount > 0) ? TotalLoad / Smp.CpuCount : Nothing;
     }
     if (__MaxLoad__)
     {
@@ -552,14 +538,14 @@ GetSystemLoadStats(uint32_t* __TotalThreads__,
 }
 
 void
-ThreadYield(void)
+ThreadYield(SysErr* __Err__ _unused)
 {
     /*Software Interrupt*/
     __asm__ volatile("int $0x20");
 }
 
 void
-ThreadSleep(uint64_t __Milliseconds__)
+ThreadSleep(uint64_t __Milliseconds__, SysErr* __Err__)
 {
     uint32_t CpuId   = GetCurrentCpuId();
     Thread*  Current = GetCurrentThread(CpuId);
@@ -570,14 +556,11 @@ ThreadSleep(uint64_t __Milliseconds__)
         Current->WaitReason = WaitReasonSleep;
         Current->WakeupTime = GetSystemTicks() + __Milliseconds__;
 
-        /* Trigger scheduler by invoking timer interrupt */
         __asm__ volatile("int $0x20");
     }
     else
     {
-        PWarn("Sleep Halt loop Has been jumped!\n");
-
-        /* Busy wait fallback using halt instruction */
+        /*busy wait*/
         uint64_t WakeupTime = GetSystemTicks() + __Milliseconds__;
         while (GetSystemTicks() < WakeupTime)
         {
@@ -587,13 +570,14 @@ ThreadSleep(uint64_t __Milliseconds__)
 }
 
 void
-ThreadExit(uint32_t __ExitCode__)
+ThreadExit(uint32_t __ExitCode__, SysErr* __Err__)
 {
     uint32_t CpuId   = GetCurrentCpuId();
     Thread*  Current = GetCurrentThread(CpuId);
 
-    if (!Current)
+    if (!Current || Probe_IF_Error(Current))
     {
+        SlotError(__Err__, -NoOperations);
         return;
     }
 
@@ -602,28 +586,30 @@ ThreadExit(uint32_t __ExitCode__)
 
     PInfo("Thread %u exiting with code %u\n", Current->ThreadId, __ExitCode__);
 
-    AddThreadToZombieQueue(CpuId, Current);
-    __asm__ volatile("int $0x20");
+    AddThreadToZombieQueue(CpuId, Current, __Err__);
+    ThreadYield(__Err__);
 }
 
 Thread*
 FindThreadById(uint32_t __ThreadId__)
 {
-    AcquireSpinLock(&ThreadListLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ThreadListLock, Error);
 
     Thread* Current = ThreadList;
     while (Current)
     {
         if (Current->ThreadId == __ThreadId__)
         {
-            ReleaseSpinLock(&ThreadListLock);
+            ReleaseSpinLock(&ThreadListLock, Error);
             return Current;
         }
         Current = Current->Next;
     }
 
-    ReleaseSpinLock(&ThreadListLock);
-    return NULL;
+    ReleaseSpinLock(&ThreadListLock, Error);
+    return Error_TO_Pointer(-NoSuch);
 }
 
 uint32_t
@@ -631,24 +617,26 @@ GetThreadCount(void)
 {
     uint32_t Count = 0;
 
-    AcquireSpinLock(&ThreadListLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ThreadListLock, Error);
     Thread* Current = ThreadList;
     while (Current)
     {
         Count++;
         Current = Current->Next;
     }
-    ReleaseSpinLock(&ThreadListLock);
+    ReleaseSpinLock(&ThreadListLock, Error);
 
     return Count;
 }
 
 void
-WakeSleepingThreads(void)
+WakeSleepingThreads(SysErr* __Err__)
 {
     uint64_t CurrentTicks = GetSystemTicks();
 
-    AcquireSpinLock(&ThreadListLock);
+    AcquireSpinLock(&ThreadListLock, __Err__);
     Thread* Current = ThreadList;
 
     while (Current)
@@ -662,14 +650,15 @@ WakeSleepingThreads(void)
         Current = Current->Next;
     }
 
-    ReleaseSpinLock(&ThreadListLock);
+    ReleaseSpinLock(&ThreadListLock, __Err__);
 }
 
 void
-DumpThreadInfo(Thread* __ThreadPtr__)
+DumpThreadInfo(Thread* __ThreadPtr__, SysErr* __Err__)
 {
     if (!__ThreadPtr__)
     {
+        SlotError(__Err__, -BadArgs);
         return;
     }
 
@@ -691,9 +680,9 @@ DumpThreadInfo(Thread* __ThreadPtr__)
 }
 
 void
-DumpAllThreads(void)
+DumpAllThreads(SysErr* __Err__)
 {
-    AcquireSpinLock(&ThreadListLock);
+    AcquireSpinLock(&ThreadListLock, __Err__);
     Thread*  Current = ThreadList;
     uint32_t Count   = 0;
 
@@ -708,7 +697,7 @@ DumpAllThreads(void)
         Count++;
     }
 
-    ReleaseSpinLock(&ThreadListLock);
+    ReleaseSpinLock(&ThreadListLock, __Err__);
 
     PInfo("Total threads: %u\n", Count);
 }

@@ -1,11 +1,12 @@
 #include <BlockDev.h>
+#include <Errnos.h>
 
 int
 BlockMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index__)
 {
     if (!__Out__ || __Cap__ <= 0 || !__Prefix__)
     {
-        return -1;
+        return -BadArgs;
     }
 
     /* sd + 0 -> sda, sd + 1 -> sdb ... */
@@ -15,7 +16,7 @@ BlockMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index_
     long total = pLen + 1;
     if (total + 1 > __Cap__)
     {
-        return -2;
+        return -Limits;
     }
 
     for (long I = 0; I < pLen; I++)
@@ -24,7 +25,7 @@ BlockMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index_
     }
     __Out__[pLen]     = suffix;
     __Out__[pLen + 1] = '\0';
-    return 0;
+    return SysOkay;
 }
 
 int
@@ -32,7 +33,7 @@ BlockMakePartName(char* __Out__, long __Cap__, const char* __DiskName__, long __
 {
     if (!__Out__ || __Cap__ <= 0 || !__DiskName__)
     {
-        return -1;
+        return -BadArgs;
     }
 
     /* sda + 1 -> sda1 */
@@ -64,7 +65,7 @@ BlockMakePartName(char* __Out__, long __Cap__, const char* __DiskName__, long __
     long total = dLen + nLen;
     if (total + 1 > __Cap__)
     {
-        return -2;
+        return -Limits;
     }
 
     for (long I = 0; I < dLen; I++)
@@ -76,5 +77,5 @@ BlockMakePartName(char* __Out__, long __Cap__, const char* __DiskName__, long __
         __Out__[dLen + I] = num[I];
     }
     __Out__[total] = '\0';
-    return 0;
+    return SysOkay;
 }

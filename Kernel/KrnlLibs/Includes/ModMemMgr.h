@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KrnPrintf.h>
 #include <PMM.h>
 #include <VMM.h>
@@ -20,9 +21,9 @@ typedef struct
 
 extern ModuleMemoryManager ModMem;
 
-void  ModMemInit(void);
+void  ModMemInit(SysErr* __Err__);
 void* ModMalloc(size_t __Size__, int __IsText__);
-void  ModFree(void* __Addr__, size_t __Size__);
+void  ModFree(void* __Addr__, size_t __Size__, SysErr* __Err__);
 
 KEXPORT(ModMemInit);
 KEXPORT(ModMalloc);

@@ -13,7 +13,7 @@ int
 ModuleRegistryInit(void)
 {
     ModuleListHead = ModuleListHead;
-    return 0;
+    return SysOkay;
 }
 
 int
@@ -21,13 +21,12 @@ ModuleRegistryAdd(ModuleRecord* __Rec__)
 {
     if (!__Rec__)
     {
-        PError("MOD: Registry add invalid record\n");
-        return -1;
+        return -BadArgs;
     }
 
     __Rec__->Next  = ModuleListHead;
     ModuleListHead = __Rec__;
-    return 0;
+    return SysOkay;
 }
 
 ModuleRecord*
@@ -35,8 +34,7 @@ ModuleRegistryFind(const char* __Name__)
 {
     if (!__Name__)
     {
-        PError("MOD: Registry find invalid name\n");
-        return 0;
+        return Error_TO_Pointer(-BadArgs);
     }
 
     ModuleRecord* It = ModuleListHead;
@@ -48,7 +46,7 @@ ModuleRegistryFind(const char* __Name__)
         }
         It = It->Next;
     }
-    return 0;
+    return Error_TO_Pointer(-NoSuch);
 }
 
 int
@@ -56,8 +54,7 @@ ModuleRegistryRemove(ModuleRecord* __Rec__)
 {
     if (!__Rec__)
     {
-        PError("MOD: Registry remove invalid record\n");
-        return -1;
+        return -BadArgs;
     }
 
     ModuleRecord* Prev = 0;
@@ -74,11 +71,10 @@ ModuleRegistryRemove(ModuleRecord* __Rec__)
             {
                 ModuleListHead = It->Next;
             }
-            return 0;
+            return SysOkay;
         }
         Prev = It;
         It   = It->Next;
     }
-    PError("MOD: Registry remove not found\n");
-    return -1;
+    return -NoSuch;
 }

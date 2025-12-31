@@ -1,11 +1,14 @@
 
+#include <Errnos.h>
 #include <KrnPrintf.h>
 #include <Serial.h>
 
 void
 KrnPrintf(const char* __Format__, ...)
 {
-    AcquireSpinLock(&ConsoleLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ConsoleLock, Error);
     __builtin_va_list args;
     __builtin_va_start(args, __Format__);
 
@@ -24,13 +27,15 @@ KrnPrintf(const char* __Format__, ...)
     }
 
     __builtin_va_end(args);
-    ReleaseSpinLock(&ConsoleLock);
+    ReleaseSpinLock(&ConsoleLock, Error);
 }
 
 void
 KrnPrintfColor(uint32_t __FG__, uint32_t __BG__, const char* __Format__, ...)
 {
-    AcquireSpinLock(&ConsoleLock);
+    SysErr  err;
+    SysErr* Error = &err;
+    AcquireSpinLock(&ConsoleLock, Error);
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
@@ -55,7 +60,7 @@ KrnPrintfColor(uint32_t __FG__, uint32_t __BG__, const char* __Format__, ...)
 
     __builtin_va_end(args);
     SetBGColor(OldFG, OldBG);
-    ReleaseSpinLock(&ConsoleLock);
+    ReleaseSpinLock(&ConsoleLock, Error);
 }
 
 void

@@ -15,7 +15,8 @@ AxeKrnl := Kernel/.Build/bin/axekrnl
 BuildAxe \
 clean \
 AxeKrnl \
-FinalImg
+FinalImg \
+RebuildLibc
 
 BuildAxe: AxeKrnl FinalImg
 	@echo "$(GREEN)[SUCCESS] build completed successfully$(RESET)"
@@ -47,6 +48,12 @@ FinalImg: AxeKrnl
 	@sudo umount /mnt
 	@sudo losetup -d /dev/loop0
 	@echo "$(GREEN)[SUCCESS] disk image created at: $(DiskImg)$(RESET)"
+
+#just incase i edit something
+RebuildLibc:
+	@$(MAKE) -C CLibrary clean
+	@$(MAKE) -C CLibrary all
+	@$(MAKE) -C CLibrary install
 
 clean:
 	@echo "$(YELLOW)[INFO] cleaning build...$(RESET)"

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KrnPrintf.h>
 #include <PMM.h>
 #include <VFS.h>
@@ -47,7 +48,7 @@ extern RamFSContext RamFS;
 uint32_t   CpioAlignUp(uint32_t __Value__, uint32_t __Align__);
 uint32_t   CpioParseHex(const char* __Hex__);
 RamFSNode* RamFSCreateNode(const char* __Name__, RamFSNodeType __Type__);
-void       RamFSAddChild(RamFSNode* __Parent__, RamFSNode* __Child__);
+void       RamFSAddChild(RamFSNode* __Parent__, RamFSNode* __Child__, SysErr* __Err__);
 RamFSNode* RamFSEnsureRoot(void);
 RamFSNode* RamFSAttachPath(RamFSNode*     __Root__,
                            const char*    __FullPath__,
@@ -104,7 +105,7 @@ int    RamVfsUnmap(Vnode*, void*, long);
 
 int  RamVfsSuperSync(Superblock*);
 int  RamVfsSuperStatFs(Superblock*, VfsStatFs*);
-void RamVfsSuperRelease(Superblock*);
+void RamVfsSuperRelease(Superblock*, SysErr*);
 int  RamVfsSuperUmount(Superblock*);
 
 Superblock* RamFsMountImpl(const char*, const char*);

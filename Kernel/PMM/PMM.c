@@ -1,3 +1,4 @@
+#include <Errnos.h>
 #include <PMM.h>
 
 PhysicalMemoryManager Pmm = {0};
@@ -7,7 +8,7 @@ FindFreePage(void)
 {
     uint64_t StartHint = Pmm.LastAllocHint;
 
-    /*Search from hint forward to end of memory*/
+    /*Look from hint forward to end of memory*/
     for (uint64_t Index = StartHint; Index < Pmm.TotalPages; Index++)
     {
         if (!TestBitmapBit(Index))
@@ -17,7 +18,7 @@ FindFreePage(void)
         }
     }
 
-    /*Search from beginning to hint if not found above*/
+    /*Look from beginning to hint if not found above*/
     for (uint64_t Index = 0; Index < StartHint; Index++)
     {
         if (!TestBitmapBit(Index))
@@ -31,37 +32,32 @@ FindFreePage(void)
 }
 
 void
-InitializePmm(void)
+InitializePmm(SysErr* __Err__)
 {
-    PInfo("Initializing Physical Memory Manager...\n");
-
-    /*Retrieve HHDM offset for address translation*/
     if (!HhdmRequest.response)
     {
-        PError("Failed to get HHDM from Limine\n");
+        SlotError(__Err__, -NotCanonical);
         return;
     }
     Pmm.HhdmOffset = HhdmRequest.response->offset;
     PDebug("HHDM offset: 0x%016lx\n", Pmm.HhdmOffset);
 
-    /*Parse system memory map from bootloader*/
-    ParseMemoryMap();
+    ParseMemoryMap(__Err__);
     if (Pmm.RegionCount == 0)
     {
-        PError("No memory regions found\n");
+        SlotError(__Err__, -NoSuch);
         return;
     }
 
-    /*Initialize the allocation bitmap*/
-    InitializeBitmap();
+    InitializeBitmap(__Err__);
     if (Pmm.Bitmap == 0)
     {
-        PError("Failed to initialize PMM bitmap\n");
+        SlotError(__Err__, -NotInit);
         return;
     }
 
-    /*Mark memory regions as used/free based on their type*/
-    MarkMemoryRegions();
+    /*Markup*/
+    MarkMemoryRegions(__Err__);
 
     /*Calculate final memory statistics*/
     Pmm.Stats.TotalPages = Pmm.TotalPages;
@@ -92,12 +88,14 @@ AllocPage(void)
 
     if (PageIndex == PmmBitmapNotFound)
     {
-        PError("Out of physical memory - no free pages available\n");
-        return 0;
+        return Nothing;
     }
 
+    SysErr  err;
+    SysErr* Error = &err;
+
     /*Mark page as used in bitmap*/
-    SetBitmapBit(PageIndex);
+    SetBitmapBit(PageIndex, Error);
     Pmm.Stats.UsedPages++;
     Pmm.Stats.FreePages--;
 
@@ -108,11 +106,11 @@ AllocPage(void)
 }
 
 void
-FreePage(uint64_t __PhysAddr__)
+FreePage(uint64_t __PhysAddr__, SysErr* __Err__)
 {
-    if (!PmmValidatePage(__PhysAddr__))
+    if (PmmValidatePage(__PhysAddr__) != SysOkay)
     {
-        PError("Invalid physical address for free: 0x%016lx\n", __PhysAddr__);
+        SlotError(__Err__, -NotCanonical);
         return;
     }
 
@@ -120,16 +118,16 @@ FreePage(uint64_t __PhysAddr__)
 
     if (!TestBitmapBit(PageIndex))
     {
-        PError("Double free detected at: 0x%016lx\n", __PhysAddr__);
+        SlotError(__Err__, -Overflow);
         return;
     }
 
     /*Mark page as free in bitmap*/
-    ClearBitmapBit(PageIndex);
+    ClearBitmapBit(PageIndex, __Err__);
     Pmm.Stats.UsedPages--;
     Pmm.Stats.FreePages++;
 
-    PDebug("Freed page: 0x%016lx (index %lu)\n", __PhysAddr__, PageIndex);
+    PDebug("Freed a page: 0x%016lx (index %lu)\n", __PhysAddr__, PageIndex);
 }
 
 uint64_t
@@ -137,8 +135,7 @@ AllocPages(size_t __Count__)
 {
     if (__Count__ == 0)
     {
-        PWarn("Attempted to allocate 0 pages\n");
-        return 0;
+        return Nothing;
     }
 
     if (__Count__ == 1)
@@ -148,20 +145,14 @@ AllocPages(size_t __Count__)
 
     if (__Count__ > Pmm.Stats.FreePages)
     {
-        PError("Not enough free pages: requested %lu, available %lu\n",
-               __Count__,
-               Pmm.Stats.FreePages);
-        return 0;
+        return Nothing;
     }
-
-    PDebug("Searching for %lu contiguous pages...\n", __Count__);
 
     /*Search for contiguous free block*/
     for (uint64_t StartIndex = 0; StartIndex <= Pmm.TotalPages - __Count__; StartIndex++)
     {
         int Found = 1;
 
-        /*Check if all pages in range are free*/
         for (size_t Offset = 0; Offset < __Count__; Offset++)
         {
             if (TestBitmapBit(StartIndex + Offset))
@@ -176,7 +167,9 @@ AllocPages(size_t __Count__)
             /*Mark all pages in block as used*/
             for (size_t Offset = 0; Offset < __Count__; Offset++)
             {
-                SetBitmapBit(StartIndex + Offset);
+                SysErr  err;
+                SysErr* Error = &err;
+                SetBitmapBit(StartIndex + Offset, Error);
             }
 
             Pmm.Stats.UsedPages += __Count__;
@@ -189,25 +182,24 @@ AllocPages(size_t __Count__)
         }
     }
 
-    PError("Failed to find %lu contiguous pages\n", __Count__);
-    return 0;
+    return Nothing;
 }
 
 void
-FreePages(uint64_t __PhysAddr__, size_t __Count__)
+FreePages(uint64_t __PhysAddr__, size_t __Count__, SysErr* __Err__)
 {
     if (__Count__ == 0)
     {
-        PWarn("Attempted to free 0 pages\n");
+        SlotError(__Err__, -TooLess);
         return;
     }
 
     PDebug("Freeing %lu pages starting at 0x%016lx\n", __Count__, __PhysAddr__);
 
-    /*Free each page individually*/
+    /*Linearly free*/
     for (size_t Index = 0; Index < __Count__; Index++)
     {
-        FreePage(__PhysAddr__ + (Index * PageSize));
+        FreePage(__PhysAddr__ + (Index * PageSize), __Err__);
     }
 }
 
@@ -216,18 +208,15 @@ PmmValidatePage(uint64_t __PhysAddr__)
 {
     if (__PhysAddr__ == 0)
     {
-        PDebug("Invalid page address: NULL\n");
-        return 0;
+        return -NotCanonical;
     }
     if ((__PhysAddr__ % PageSize) != 0)
     {
-        PDebug("Invalid page address: not aligned to %u bytes\n", PageSize);
-        return 0;
+        return -NotCanonical;
     }
     if ((__PhysAddr__ / PageSize) >= Pmm.TotalPages)
     {
-        PDebug("Invalid page address: beyond total pages\n");
-        return 0;
+        return -TooMany;
     }
-    return 1;
+    return SysOkay;
 }

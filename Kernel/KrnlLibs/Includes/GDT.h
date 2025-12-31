@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KrnPrintf.h>
 #include <SMP.h>
 
@@ -80,7 +81,8 @@ void SetGdtEntry(int      __Index__,
                  uint32_t __Base__,
                  uint32_t __Limit__,
                  uint8_t  __Access__,
-                 uint8_t  __Granularity__);
-void InitializeGdt(void);
-void SetTssEntry(int __Index__, uint64_t __Base__, uint32_t __Limit__);
-void InitializeTss(void);
+                 uint8_t  __Granularity__,
+                 SysErr*  __Err__);
+void InitializeGdt(SysErr* __Err__);
+void SetTssEntry(int __Index__, uint64_t __Base__, uint32_t __Limit__, SysErr* __Err__);
+void InitializeTss(SysErr* __Err__);

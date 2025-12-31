@@ -1,5 +1,6 @@
 #pragma once
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KExports.h>
 #include <Sync.h>
 #include <VFS.h>
@@ -75,7 +76,7 @@ int    ProcMap(Vnode* __Node__, void** __Out__, long __Len__, long __Flags__);
 int    ProcUnmap(Vnode* __Node__, void* __Addr__, long __Len__);
 int    ProcSuperSync(Superblock* __Sb__);
 int    ProcSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__);
-void   ProcSuperRelease(Superblock* __Sb__);
+void   ProcSuperRelease(Superblock* __Sb__, SysErr* __Err__);
 int    ProcSuperUmount(Superblock* __Sb__);
 int    ProcFsNotifyProcAdded(PosixProc* __Proc__);
 int    ProcFsNotifyProcRemoved(PosixProc* __Proc__);

@@ -1,10 +1,10 @@
-#include <APICTimer.h>  /* APIC Timer specific constants and functions */
-#include <AxeSchd.h>    /* Axe Scheduler definitions */
-#include <AxeThreads.h> /* Thread management interfaces */
-#include <SymAP.h>      /* Symmetric Multiprocessing Application Processor definitions */
+#include <APICTimer.h>
+#include <AxeSchd.h>
+#include <AxeThreads.h>
+#include <SymAP.h>
 #include <Syscall.h>
-#include <Timer.h> /* Timer management interfaces */
-#include <VMM.h>   /* Virtual Memory Management functions */
+#include <Timer.h>
+#include <VMM.h>
 
 void
 ApEntryPoint(struct limine_smp_info* __CpuInfo__)
@@ -19,6 +19,9 @@ ApEntryPoint(struct limine_smp_info* __CpuInfo__)
         }
     }
 
+    SysErr  err;
+    SysErr* Error = &err;
+
     Smp.Cpus[CpuNumber].Status  = CPU_STATUS_ONLINE;
     Smp.Cpus[CpuNumber].Started = 1; /* Boolean flag indicating startup completion */
 
@@ -28,7 +31,6 @@ ApEntryPoint(struct limine_smp_info* __CpuInfo__)
     uint64_t CpuStackPhys = AllocPages(SMPCPUStackSize / 0x1000);
     if (!CpuStackPhys)
     {
-        PError("AP: Failed to allocate stack for CPU %u\n", CpuNumber);
         while (1)
         {
             __asm__("hlt"); /* Infinite loop of shame; CPU cannot proceed */
@@ -40,9 +42,9 @@ ApEntryPoint(struct limine_smp_info* __CpuInfo__)
     uint64_t NewStackTop = (uint64_t)CpuStack + SMPCPUStackSize - 16;
     __asm__ volatile("movq %0, %%rsp" : : "r"(NewStackTop));
 
-    PInfo("AP: CPU %u online with stack at 0x%016lx\n", CpuNumber, NewStackTop);
+    PInfo("CPU %u online with stack at 0x%016lx\n", CpuNumber, NewStackTop);
 
-    PerCpuInterruptInit(CpuNumber, NewStackTop);
+    PerCpuInterruptInit(CpuNumber, NewStackTop, Error);
 
     unsigned long Cr0, Cr4;
 
@@ -63,11 +65,11 @@ ApEntryPoint(struct limine_smp_info* __CpuInfo__)
     /* Initialize x87/SSE state */
     __asm__ volatile("fninit");
 
-    SetupApicTimerForThisCpu();
+    SetupApicTimerForThisCpu(Error);
 
-    InitializeCpuScheduler(CpuNumber);
+    InitializeCpuScheduler(CpuNumber, Error);
 
-    SetIdtEntry(0x80, (uint64_t)SysEntASM, KernelCodeSelector, 0xEE);
+    SetIdtEntry(0x80, (uint64_t)SysEntASM, KernelCodeSelector, 0xEE, Error);
 
     __asm__ volatile("sti");
 

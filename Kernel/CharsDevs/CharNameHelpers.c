@@ -1,10 +1,11 @@
+#include <Errnos.h>
 
 int
 CharMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index__)
 {
     if (!__Out__ || !__Prefix__ || __Cap__ <= 0)
     {
-        return -1;
+        return -BadArgs;
     }
     long Pos = 0;
     while (__Prefix__[Pos] && Pos < __Cap__)
@@ -14,7 +15,7 @@ CharMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index__
     }
     if (Pos >= __Cap__)
     {
-        return -1;
+        return -Limits;
     }
 
     /* Append decimal index */
@@ -25,7 +26,7 @@ CharMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index__
     {
         if (Pos >= __Cap__)
         {
-            return -1;
+            return -Limits;
         }
         __Out__[Pos++] = '0';
     }
@@ -38,7 +39,7 @@ CharMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index__
         }
         if (Pos + Len > __Cap__)
         {
-            return -1;
+            return -Limits;
         }
         for (int I = Len - 1; I >= 0; --I)
         {

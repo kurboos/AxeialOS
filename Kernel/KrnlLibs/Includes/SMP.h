@@ -1,6 +1,7 @@
 #pragma once
 
 #include <AllTypes.h>
+#include <Errnos.h>
 #include <KrnPrintf.h>
 #include <LimineServices.h>
 
@@ -38,7 +39,7 @@ typedef struct
 extern SmpManager        Smp;
 extern volatile uint32_t CpuStartupCount;
 
-void     InitializeSmp(void);
+void     InitializeSmp(SysErr* __Err__);
 void     ApEntryPoint(struct limine_smp_info* __CpuInfo__);
 uint32_t GetCurrentCpuId(void);
-void     PerCpuInterruptInit(uint32_t __CpuId__, uint64_t __InterruptStack__);
+void     PerCpuInterruptInit(uint32_t __CpuId__, uint64_t __InterruptStack__, SysErr* __Err__);

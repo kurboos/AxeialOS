@@ -1,11 +1,13 @@
 qemu-system-x86_64 \
-    -bios /usr/share/ovmf/OVMF.fd \
-    -drive format=raw,file=./.Build/axeialos.img \
-    -m 512M \
-    -smp 4 \
-    -serial file:debug.log \
-    -d guest_errors,cpu_reset,int,pcall \
-    -D qemu.log \
-    -no-reboot \
-    -no-shutdown \
-	-machine q35
+  -bios /usr/share/ovmf/OVMF.fd \
+  -machine q35 \
+  -m 512M \
+  -smp 4 \
+  -serial file:debug.log \
+  -d guest_errors,cpu_reset,int,pcall \
+  -D qemu.log \
+  -no-reboot \
+  -no-shutdown \
+  -device ahci,id=ahci0 \
+  -drive id=hd0,file=./.Build/axeialos.img,format=raw,if=none \
+  -device ide-hd,drive=hd0,bus=ahci0.0

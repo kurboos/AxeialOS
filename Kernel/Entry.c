@@ -1,10 +1,13 @@
 #include "KrnCommon.h"
 #include <Errnos.h>
 
+// #define EarlySplash
+
 /** Devs */
 #define __Kernel__
 
 SpinLock TestLock;
+bool     InitComplete = false;
 
 /*Worker*/
 void
@@ -17,10 +20,113 @@ KernelWorkerThread(void* __Argument__)
 
     PInfo("Kernel Worker started on CPU %u\n", GetCurrentCpuId());
 
+    /*Modules*/
+    ModMemInit(Error);
+    InitializeBootImage();
+
+    /*Udev/Devfs*/
+    DevFsInit();
+    Superblock* SuperBlk = DevFsMountImpl(0, 0);
+    if (Probe_IF_Error(SuperBlk))
+    {
+        InitComplete = false;
+        PError("devfs failed\n");
+    }
+    else
+    {
+        InitComplete = true;
+    }
+
+    if (VfsRegisterPseudoFs("/dev", SuperBlk) != SysOkay)
+    {
+        InitComplete = false;
+        PError("mount udev/devfs failed\n");
+    }
+    else
+    {
+        InitComplete = true;
+    }
+    DevFsRegisterSeedDevices();
+
+    /*Procfs*/
+    if (ProcFsInit() != SysOkay)
+    {
+        InitComplete = false;
+        PError("procfs init failed\n");
+    }
+    else
+    {
+        InitComplete = true;
+    }
+
+    if (InitComplete == true)
+    {
+        PSuccess("[Early kernel init complete]\n");
+    }
+    else
+    {
+        PError("[Early kernel init failed]\n");
+    }
+
+    /*Buses*/
+
+    /*PCI*/
+    if (InitializePciBus() != SysOkay)
+    {
+        InitComplete = false;
+        PError("pcibus init failed\n");
+    }
+    else
+    {
+        PciDumpAllDevices(Error);
+        InitComplete = true;
+    }
+
     /*Testing*/
     __TEST__Proc();
 
-    PSuccess("[Post kernel init complete]\n");
+    if (InitComplete == true)
+    {
+        PSuccess("[Post kernel init complete]\n");
+
+#ifdef EarlySplash
+
+        ClearConsole();
+
+        PSuccess("[Splash]\n");
+
+        KrnPrintf("        @         B H           M&@     @@@@@@@@@@    @@@@         @          "
+                  "@@@@      \n");
+        KrnPrintf("       9@        @r i              G    @@@@@@@@@@    @@@@         9@         "
+                  "@@@@      \n");
+        KrnPrintf("       @@@     2    @@r       h@    ;   @@@S          @@@@        @@@@        "
+                  "@@@@      \n");
+        KrnPrintf("      @@@@@   i ; ;@h&;#     @B@@@    : @@@S          @@@@        @@@@        "
+                  "@@@@      \n");
+        KrnPrintf("     S@@@@@    &sA@   @@&s 3B@A   @  @  @@@S          @@@@       @@@@@@       "
+                  "@@@@      \n");
+        KrnPrintf("     @@@ @@@     X     B@@h@@9          @@@@@@@@@     @@@@      @@@@@@@@      "
+                  "@@@@      \n");
+        KrnPrintf("    @@@@ @@@@           @@i&@           @@@@@@@@@     @@@@      @@@  @@@      "
+                  "@@@@      \n");
+        KrnPrintf("   ;@@@   @@@          @#@ @&h          @@@S          @@@@     @@@@  @@@@     "
+                  "@@@@      \n");
+        KrnPrintf("   @@@2   @@@@       @r@B   B@sr        @@@S          @@@@    9@@@    @@@S    "
+                  "@@@@      \n");
+        KrnPrintf("  @@@@@@@@@@@@@     @S@i    rr@#@       @@@S          @@@@    @@@@@@@@@@@@    "
+                  "@@@@      \n");
+        KrnPrintf("  @@@@@@@@@@@@@   @@Gh         H5@S     @@@S          @@@@   @@@@@@@@@@@@@@   "
+                  "@@@@      \n");
+        KrnPrintf(" @@@@       @@@@s;@29          i@2@9    @@@@@@@@@@@   @@@@  h@@@        @@@i  "
+                  "@@@@@@@@@@\n");
+        KrnPrintf("@@@@         @@@@ @               A     @@@@@@@@@@@   @@@@  @@@@        @@@@  "
+                  "@@@@@@@@@@\n");
+#endif
+    }
+    else
+    {
+        PError("[Post kernel init failed]\n");
+    }
 
     /*ig this can be our idle thread???*/
     for (;;)
@@ -55,6 +161,11 @@ _start(void)
 
             PInfo("AxeKrnl Kernel Booting...\n");
         }
+        else
+        {
+            InitComplete = false;
+            SerialPutString("No frambuffer provided, no console");
+        }
 
         PInfo("[Starting early kernel init]\n");
 
@@ -64,22 +175,14 @@ _start(void)
 
         /*FPU,SSE,Floats*/
         unsigned long Cr0, Cr4;
-
-        /* Read CR0 and CR4 */
         __asm__ volatile("mov %%cr0, %0" : "=r"(Cr0));
         __asm__ volatile("mov %%cr4, %0" : "=r"(Cr4));
-
-        /* CR0: clear EM (bit 2), set MP (bit 1), clear TS (bit 3) */
         Cr0 &= ~(1UL << 2); /* EM = 0 */
         Cr0 |= (1UL << 1);  /* MP = 1 */
         Cr0 &= ~(1UL << 3); /* TS = 0 */
         __asm__ volatile("mov %0, %%cr0" ::"r"(Cr0) : "memory");
-
-        /* CR4: set OSFXSR (bit 9) and OSXMMEXCPT (bit 10) for SSE */
         Cr4 |= (1UL << 9) | (1UL << 10);
         __asm__ volatile("mov %0, %%cr4" ::"r"(Cr4) : "memory");
-
-        /* Initialize x87/SSE state */
         __asm__ volatile("fninit");
 
         /*Memory managers*/
@@ -99,40 +202,19 @@ _start(void)
         InitializeThreadManager(Error);
         InitializeScheduler(Error);
 
-        /*Modules*/
-        ModMemInit(Error);
-        InitializeBootImage();
-
-        /*Udev/Devfs*/
-        DevFsInit();
-        Superblock* SuperBlk = DevFsMountImpl(0, 0);
-        if (!SuperBlk)
-        {
-            PError("devfs failed\n");
-        }
-
-        if (VfsRegisterPseudoFs("/dev", SuperBlk) != SysOkay)
-        {
-            PError("mount udev/devfs failed\n");
-        }
-        DevFsRegisterSeedDevices();
-
-        /*Procfs*/
-        if (ProcFsInit() != SysOkay)
-        {
-            PError("procfs init failed\n");
-        }
-
-        PSuccess("[Early kernel init complete]\n");
-
         /*Kernel worker*/
-
         Thread* KernelWorker =
             CreateThread(ThreadTypeKernel, KernelWorkerThread, NULL, ThreadPrioritykernel);
         if (KernelWorker)
         {
             ThreadExecute(KernelWorker, Error);
             PSuccess("Ctl Transfer to Worker\n");
+            InitComplete = true;
+        }
+        else
+        {
+            PError("[Cannot start the post kernel init]\n");
+            InitComplete = false;
         }
     }
 

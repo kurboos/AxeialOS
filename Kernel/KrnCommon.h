@@ -16,6 +16,7 @@
 #include <LimineServices.h>
 #include <ModELF.h>
 #include <ModMemMgr.h>
+#include <PCIBus.h>
 #include <PMM.h>
 #include <POSIXFd.h>
 #include <POSIXProc.h>
@@ -32,6 +33,9 @@
 
 /*for sensitive testing*/
 extern SpinLock TestLock;
+
+/*flag*/
+extern bool InitComplete;
 
 /*TEST handles*/
 void __TEST__Proc(void);

@@ -3,7 +3,6 @@
 .build/
 Repository.sh
 Fix.sh
-debug.log
 regnexhelp.md
 qemu.log
 .clang-format
@@ -17,3 +16,4 @@ lol3.txt
 *.swp
 Message.md
 Message1.md
+Tools/

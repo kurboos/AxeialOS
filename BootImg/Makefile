@@ -5,7 +5,6 @@ BootImg        := $(BuildDirectory)/BootImg.img
 
 SubMake := $(shell find . -name Makefile \
     -not -path './Makefile' \
-    -not -path './PCIBus/*' \
 	-not -path './ELFLoader/*' \
 	-not -path './Tty/*')
 

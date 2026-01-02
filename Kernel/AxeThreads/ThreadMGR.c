@@ -13,6 +13,16 @@ Thread*         ThreadList   = NULL;
 SpinLock        ThreadListLock;
 Thread*         CurrentThreads[MaxCPUs];
 static SpinLock CurrentThreadLock; /*Mutexes would have been fine ig*/
+Thread*         IdleThread;
+
+static void
+Idler(void* __Arg__)
+{
+    for (;;)
+    {
+        __asm__("hlt");
+    }
+}
 
 void
 InitializeThreadManager(SysErr* __Err__)
@@ -25,6 +35,18 @@ InitializeThreadManager(SysErr* __Err__)
     for (uint32_t CpuIndex = 0; CpuIndex < MaxCPUs; CpuIndex++)
     {
         CurrentThreads[CpuIndex] = NULL;
+    }
+
+    SysErr  err;
+    SysErr* Error = &err;
+
+    /*Idle thread*/
+    IdleThread = CreateThread(ThreadTypeKernel, Idler, NULL, ThreadPriorityIdle);
+
+    if (Probe_IF_Error(IdleThread))
+    {
+        SlotError(__Err__, -BadAlloc);
+        return;
     }
 
     PSuccess("Thread Manager initialized\n");

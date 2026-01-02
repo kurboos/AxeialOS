@@ -15,9 +15,11 @@ PError(const char* __Format__, ...)
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
+    PutPrint("[");
     SetBGColor(ClrError, ClrInvisible);
-    PutPrint("[ERROR]:");
+    PutPrint("    ERROR    ");
     SetBGColor(ClrNormal, ClrInvisible);
+    PutPrint("]: ");
 
     __builtin_va_list args;
     __builtin_va_start(args, __Format__);
@@ -54,9 +56,11 @@ PWarn(const char* __Format__, ...)
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
+    PutPrint("[");
     SetBGColor(ClrWarn, ClrInvisible);
-    PutPrint("[WARN]:");
+    PutPrint("   WARNING   ");
     SetBGColor(ClrNormal, ClrInvisible);
+    PutPrint("]: ");
 
     __builtin_va_list args;
     __builtin_va_start(args, __Format__);
@@ -93,9 +97,11 @@ PInfo(const char* __Format__, ...)
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
+    PutPrint("[");
     SetBGColor(ClrInfo, ClrInvisible);
-    PutPrint("[INFO]:");
+    PutPrint(" INFORMATION ");
     SetBGColor(ClrNormal, ClrInvisible);
+    PutPrint("]: ");
 
     __builtin_va_list args;
     __builtin_va_start(args, __Format__);
@@ -133,7 +139,7 @@ _PDebug(const char* __Format__, ...)
     uint32_t OldBG = Console.BGColor;
 
     SetBGColor(ClrDebug, ClrInvisible);
-    PutPrint("[DEBUG]:");
+    PutPrint("[    DEBUG    ]: ");
 
     __builtin_va_list args;
     __builtin_va_start(args, __Format__);
@@ -170,9 +176,11 @@ PSuccess(const char* __Format__, ...)
     uint32_t OldFG = Console.TXColor;
     uint32_t OldBG = Console.BGColor;
 
+    PutPrint("[");
     SetBGColor(ClrSuccess, ClrInvisible);
-    PutPrint("[OK]:");
+    PutPrint("   SUCCESS   ");
     SetBGColor(ClrNormal, ClrInvisible);
+    PutPrint("]: ");
 
     __builtin_va_list args;
     __builtin_va_start(args, __Format__);

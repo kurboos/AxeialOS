@@ -7,7 +7,8 @@ __TEST__Proc(void)
     PosixProc* Proc = PosixProcCreate();
     if (!Proc)
     {
-        PError("PosixProcCreate failed\n");
+        PError("failed to create proc\n");
+        InitComplete = false;
         return;
     }
 
@@ -19,5 +20,10 @@ __TEST__Proc(void)
     if (PosixProcExecve(Proc, "/Test.elf", argv, envp) != SysOkay)
     {
         PError("Execve failed for pid=%ld\n", Proc->Pid);
+        InitComplete = true;
+    }
+    else
+    {
+        InitComplete = false;
     }
 }

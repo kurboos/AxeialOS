@@ -506,17 +506,11 @@ SelectAgain:
     NextThread = RemoveThreadFromReadyQueue(__CpuId__);
 
     /* CPU is idle */
-    if (!NextThread)
+    if (Probe_IF_Error(NextThread))
     {
         Scheduler->CurrentThread = NULL;
         __atomic_fetch_add(&Scheduler->IdleTicks, 1, __ATOMIC_SEQ_CST);
         SlotError(__Err__, -NoSuch);
-        return;
-    }
-
-    if (Probe_IF_Error(NextThread))
-    {
-        SlotError(__Err__, Pointer_TO_Error(NextThread));
         return;
     }
 

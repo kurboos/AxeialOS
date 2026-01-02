@@ -20,8 +20,8 @@ DisplayChar(uint32_t* __FrameBuffer__,
         for (int Column = 0; Column < FontW; Column++)
         {
             /* Check if bit is set (MSB is leftmost pixel) */
-            if (Line & (0x80 >> Column))
-            {
+
+            if (Line & (0x80 >> Column))            {
                 /* Calculate framebuffer offset and set pixel */
                 __FrameBuffer__[(__PosY__ + MapRow) * __FrameBufferW__ + (__PosX__ + Column)] =
                     __32bitColor__;

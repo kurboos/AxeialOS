@@ -143,6 +143,7 @@ extern uint32_t NextThreadId;
 extern Thread*  ThreadList;
 extern SpinLock ThreadListLock;
 extern Thread*  CurrentThreads[MaxCPUs];
+extern Thread*  IdleThread;
 
 /*Thread Manager Core*/
 void    InitializeThreadManager(SysErr* __Err__);

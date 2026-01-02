@@ -7,6 +7,7 @@ RESET  := \033[0m
 BuildDirectory := .Build
 EFIRoot        := $(BuildDirectory)/EFI
 DiskImg        := $(BuildDirectory)/axeialos.img
+IsoImg := $(BuildDirectory)/axeialos.iso
 
 Limine := limine
 AxeKrnl := Kernel/.Build/bin/axekrnl
@@ -16,9 +17,9 @@ BuildAxe \
 clean \
 AxeKrnl \
 FinalImg \
-RebuildLibc
+FinalISO
 
-BuildAxe: AxeKrnl FinalImg
+BuildAxe: AxeKrnl FinalImg FinalISO
 	@echo "$(GREEN)[SUCCESS] build completed successfully$(RESET)"
 
 AxeKrnl:
@@ -31,6 +32,7 @@ AxeKrnl:
 	@cp $(AxeKrnl) $(EFIRoot)/axekrnl
 	@echo "$(GREEN)[SUCCESS] kernel copied to EFI root$(RESET)"
 
+#.img
 FinalImg: AxeKrnl
 	@echo "$(YELLOW)[INFO] creating test disk image...$(RESET)"
 	@rm -f "$(DiskImg)"
@@ -49,11 +51,23 @@ FinalImg: AxeKrnl
 	@sudo losetup -d /dev/loop0
 	@echo "$(GREEN)[SUCCESS] disk image created at: $(DiskImg)$(RESET)"
 
-#just incase i edit something
-RebuildLibc:
-	@$(MAKE) -C CLibrary clean
-	@$(MAKE) -C CLibrary all
-	@$(MAKE) -C CLibrary install
+#.iso
+FinalISO: AxeKrnl
+	@echo "$(YELLOW)[INFO] creating bootable ISO image with Limine...$(RESET)"
+	@rm -f "$(IsoImg)"
+	@mkdir -p $(EFIRoot)/EFI/BOOT
+	@cp $(Limine)/BOOTX64.EFI $(EFIRoot)/EFI/BOOT/
+	@cp Boot/limine.cfg $(EFIRoot)/
+	@cp $(Limine)/limine-bios-cd.bin $(EFIRoot)/
+	@cp $(Limine)/limine-uefi-cd.bin $(EFIRoot)/
+	@xorriso -as mkisofs \
+		-b limine-bios-cd.bin \
+		-no-emul-boot -boot-load-size 4 -boot-info-table \
+		--efi-boot limine-uefi-cd.bin \
+		--protective-msdos-label \
+		-o "$(IsoImg)" \
+		"$(EFIRoot)"
+	@echo "$(GREEN)[SUCCESS] ISO image created at: $(IsoImg)$(RESET)"
 
 clean:
 	@echo "$(YELLOW)[INFO] cleaning build...$(RESET)"

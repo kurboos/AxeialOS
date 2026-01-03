@@ -14,7 +14,7 @@ static long             __Count__;
 int
 DynLoaderRegister(const DynLoader* __Loader__)
 {
-    if (!__Loader__ || __Count__ >= MaxLoaders)
+    if (Probe_IF_Error(__Loader__) || !__Loader__ || __Count__ >= MaxLoaders)
     {
         return -BadArgs;
     }

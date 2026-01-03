@@ -4,9 +4,7 @@ ImgSysMirror   := .Build
 BootImg        := $(BuildDirectory)/BootImg.img
 
 SubMake := $(shell find . -name Makefile \
-    -not -path './Makefile' \
-	-not -path './ELFLoader/*' \
-	-not -path './Tty/*')
+    -not -path './Makefile')
 
 .PHONY: all clean BootImg BuildModules
 

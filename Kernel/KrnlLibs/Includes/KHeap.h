@@ -44,6 +44,7 @@ typedef struct
 } KernelHeapManager;
 
 extern KernelHeapManager KHeap;
+extern SpinLock          KHeapLock;
 
 void  InitializeKHeap(SysErr* __Err__);
 void* KMalloc(size_t __Size__);

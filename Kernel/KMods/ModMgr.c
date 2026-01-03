@@ -19,7 +19,7 @@ ModuleRegistryInit(void)
 int
 ModuleRegistryAdd(ModuleRecord* __Rec__)
 {
-    if (!__Rec__)
+    if (Probe_IF_Error(__Rec__) || !__Rec__)
     {
         return -BadArgs;
     }
@@ -32,7 +32,7 @@ ModuleRegistryAdd(ModuleRecord* __Rec__)
 ModuleRecord*
 ModuleRegistryFind(const char* __Name__)
 {
-    if (!__Name__)
+    if (Probe_IF_Error(__Name__) || !__Name__)
     {
         return Error_TO_Pointer(-BadArgs);
     }
@@ -52,7 +52,7 @@ ModuleRegistryFind(const char* __Name__)
 int
 ModuleRegistryRemove(ModuleRecord* __Rec__)
 {
-    if (!__Rec__)
+    if (Probe_IF_Error(__Rec__) || !__Rec__)
     {
         return -BadArgs;
     }

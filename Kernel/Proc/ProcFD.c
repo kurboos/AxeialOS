@@ -121,7 +121,7 @@ PosixFdInit(PosixFdTable* __Tab__, long __Cap__)
 int
 PosixOpen(PosixFdTable* __Tab__, const char* __Path__, long __Flags__, long __Mode__)
 {
-    if (!__Tab__ || !__Path__)
+    if (Probe_IF_Error(__Tab__) || !__Tab__ || Probe_IF_Error(__Path__) || !__Path__)
     {
         return -NotCanonical;
     }
@@ -136,7 +136,7 @@ PosixOpen(PosixFdTable* __Tab__, const char* __Path__, long __Flags__, long __Mo
     }
 
     File* F = VfsOpen(__Path__, __Flags__);
-    if (!F)
+    if (Probe_IF_Error(F) || !F)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntity;
@@ -162,7 +162,7 @@ PosixClose(PosixFdTable* __Tab__, int __Fd__)
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
-    if (!E || E->Fd < 0)
+    if (Probe_IF_Error(E) || !E || E->Fd < 0)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;
@@ -193,7 +193,7 @@ PosixRead(PosixFdTable* __Tab__, int __Fd__, void* __Buf__, long __Len__)
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
-    if (!E || E->Fd < 0)
+    if (Probe_IF_Error(E) || !E || E->Fd < 0)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;
@@ -221,7 +221,7 @@ PosixWrite(PosixFdTable* __Tab__, int __Fd__, const void* __Buf__, long __Len__)
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
-    if (!E || E->Fd < 0)
+    if (Probe_IF_Error(E) || !E || E->Fd < 0)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;
@@ -252,7 +252,7 @@ PosixLseek(PosixFdTable* __Tab__, int __Fd__, long __Off__, int __Wh__)
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
-    if (!E || E->Fd < 0 || !E->IsFile)
+    if (Probe_IF_Error(E) || !E || E->Fd < 0 || Probe_IF_Error(E->IsFile) || !E->IsFile)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;
@@ -269,7 +269,7 @@ PosixDup(PosixFdTable* __Tab__, int __Fd__)
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
-    if (!E || E->Fd < 0)
+    if (Probe_IF_Error(E) || !E || E->Fd < 0)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;
@@ -300,7 +300,7 @@ PosixDup2(PosixFdTable* __Tab__, int __OldFd__, int __NewFd__)
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __OldFd__);
-    if (!E || E->Fd < 0 || !__IsValidFd__(__Tab__, __NewFd__))
+    if (Probe_IF_Error(E) || !E || E->Fd < 0 || !__IsValidFd__(__Tab__, __NewFd__))
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;
@@ -388,7 +388,7 @@ PosixFcntl(PosixFdTable* __Tab__, int __Fd__, int __Cmd__, long __Arg__ __attrib
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
-    if (!E || E->Fd < 0)
+    if (Probe_IF_Error(E) || !E || E->Fd < 0)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;
@@ -429,7 +429,7 @@ PosixIoctl(PosixFdTable* __Tab__, int __Fd__, unsigned long __Cmd__, void* __Arg
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
-    if (!E || E->Fd < 0 || !E->IsFile)
+    if (Probe_IF_Error(E) || !E || E->Fd < 0 || Probe_IF_Error(E->IsFile) || !E->IsFile)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;
@@ -458,7 +458,7 @@ PosixFstat(PosixFdTable* __Tab__, int __Fd__, VfsStat* __Out__)
     SysErr* Error = &err;
     AcquireSpinLock(&__Tab__->Lock, Error);
     PosixFd* E = __GetEntry__(__Tab__, __Fd__);
-    if (!E || E->Fd < 0 || !E->IsFile)
+    if (Probe_IF_Error(E) || !E || E->Fd < 0 || Probe_IF_Error(E->IsFile) || !E->IsFile)
     {
         ReleaseSpinLock(&__Tab__->Lock, Error);
         return -BadEntry;

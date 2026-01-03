@@ -4,7 +4,8 @@
 int
 FirmResolvePath(const FirmwareDesc* __Desc__, char* __OutPath__, long __OutLen__)
 {
-    if (!__Desc__ || !__Desc__->Name || !__OutPath__ || __OutLen__ <= 0)
+    if (Probe_IF_Error(__Desc__) || !__Desc__ || Probe_IF_Error(__Desc__->Name) ||
+        !__Desc__->Name || Probe_IF_Error(__OutPath__) || !__OutPath__ || __OutLen__ <= 0)
     {
         return -BadArgs;
     }

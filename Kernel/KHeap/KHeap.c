@@ -2,6 +2,7 @@
 #include <KHeap.h>
 
 KernelHeapManager KHeap;
+SpinLock          KHeapLock;
 
 void
 InitializeKHeap(SysErr* __Err__ _unused)

@@ -6,7 +6,7 @@ RamFSCreateNode(const char* __Name__, RamFSNodeType __Type__)
 {
     RamFSNode* Node = (RamFSNode*)KMalloc(sizeof(RamFSNode));
 
-    if (!Node)
+    if (Probe_IF_Error(Node) || !Node)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
@@ -29,7 +29,7 @@ RamFSCreateNode(const char* __Name__, RamFSNodeType __Type__)
 void
 RamFSAddChild(RamFSNode* __Parent__, RamFSNode* __Child__, SysErr* __Err__)
 {
-    if (!__Parent__ || !__Child__)
+    if (Probe_IF_Error(__Parent__) || !__Parent__ || Probe_IF_Error(__Child__) || !__Child__)
     {
         SlotError(__Err__, -BadArgs);
         return;

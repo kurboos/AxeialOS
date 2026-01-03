@@ -6,7 +6,7 @@
 void*
 KexpLookup(const char* __Name__)
 {
-    if (!__Name__)
+    if (Probe_IF_Error(__Name__) || !__Name__)
     {
         return Error_TO_Pointer(-BadArgs);
     }

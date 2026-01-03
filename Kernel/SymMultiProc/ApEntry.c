@@ -29,7 +29,7 @@ ApEntryPoint(struct limine_smp_info* __CpuInfo__)
     __atomic_fetch_add(&Smp.OnlineCpus, 1, __ATOMIC_SEQ_CST);
 
     uint64_t CpuStackPhys = AllocPages(SMPCPUStackSize / 0x1000);
-    if (!CpuStackPhys)
+    if (Probe_IF_Error(CpuStackPhys) || !CpuStackPhys)
     {
         while (1)
         {

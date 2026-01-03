@@ -22,7 +22,7 @@ ThreadFxRestore(const void* __State__)
 void
 AddThreadToReadyQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (__CpuId__ >= MaxCPUs || !__ThreadPtr__)
+    if (__CpuId__ >= MaxCPUs || Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -37,7 +37,7 @@ AddThreadToReadyQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__
 
     AcquireSpinLock(&Scheduler->SchedulerLock, __Err__);
 
-    if (!Scheduler->ReadyQueue)
+    if (Probe_IF_Error(Scheduler->ReadyQueue) || !Scheduler->ReadyQueue)
     {
         Scheduler->ReadyQueue = __ThreadPtr__;
     }
@@ -73,7 +73,7 @@ RemoveThreadFromReadyQueue(uint32_t __CpuId__)
     AcquireSpinLock(&Scheduler->SchedulerLock, Error);
 
     Thread* ThreadPtr = Scheduler->ReadyQueue;
-    if (!ThreadPtr)
+    if (Probe_IF_Error(ThreadPtr) || !ThreadPtr)
     {
         ReleaseSpinLock(&Scheduler->SchedulerLock, Error);
         return Error_TO_Pointer(-Dangling);
@@ -101,7 +101,7 @@ RemoveThreadFromReadyQueue(uint32_t __CpuId__)
 void
 AddThreadToWaitingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (__CpuId__ >= MaxCPUs || !__ThreadPtr__)
+    if (__CpuId__ >= MaxCPUs || Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -124,7 +124,7 @@ AddThreadToWaitingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err
 void
 AddThreadToZombieQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (__CpuId__ >= MaxCPUs || !__ThreadPtr__)
+    if (__CpuId__ >= MaxCPUs || Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -148,7 +148,7 @@ AddThreadToZombieQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err_
 void
 AddThreadToSleepingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (__CpuId__ >= MaxCPUs || !__ThreadPtr__)
+    if (__CpuId__ >= MaxCPUs || Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -171,7 +171,7 @@ AddThreadToSleepingQueue(uint32_t __CpuId__, Thread* __ThreadPtr__, SysErr* __Er
 void
 MigrateThreadToCpu(Thread* __ThreadPtr__, uint32_t __TargetCpuId__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__ || __TargetCpuId__ >= MaxCPUs)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__ || __TargetCpuId__ >= MaxCPUs)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -265,7 +265,7 @@ WakeupSleepingThreads(uint32_t __CpuId__, SysErr* __Err__)
             Current->Next  = NULL;
 
             /* splice into ready tail under lock */
-            if (!Scheduler->ReadyQueue)
+            if (Probe_IF_Error(Scheduler->ReadyQueue) || !Scheduler->ReadyQueue)
             {
                 Scheduler->ReadyQueue = Current;
             }
@@ -355,7 +355,7 @@ InitializeCpuScheduler(uint32_t __CpuId__, SysErr* __Err__)
 void
 SaveInterruptFrameToThread(Thread* __ThreadPtr__, InterruptFrame* __Frame__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__ || !__Frame__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__ || Probe_IF_Error(__Frame__) || !__Frame__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -389,7 +389,7 @@ SaveInterruptFrameToThread(Thread* __ThreadPtr__, InterruptFrame* __Frame__, Sys
 void
 LoadThreadContextToInterruptFrame(Thread* __ThreadPtr__, InterruptFrame* __Frame__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__ || !__Frame__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__ || Probe_IF_Error(__Frame__) || !__Frame__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -432,7 +432,7 @@ LoadThreadContextToInterruptFrame(Thread* __ThreadPtr__, InterruptFrame* __Frame
 void
 Schedule(uint32_t __CpuId__, InterruptFrame* __Frame__, SysErr* __Err__)
 {
-    if (__CpuId__ >= MaxCPUs || !__Frame__)
+    if (__CpuId__ >= MaxCPUs || Probe_IF_Error(__Frame__) || !__Frame__)
     {
         PError("Bad Arguments to the Schedular, CPUID %u\n", __CpuId__);
         SlotError(__Err__, -BadArgs);

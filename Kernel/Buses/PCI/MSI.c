@@ -6,7 +6,7 @@
 int
 PciEnableMsi(PciDevice* __Device__, uint64_t __Address__, uint32_t __Data__)
 {
-    if (!__Device__)
+    if (Probe_IF_Error(__Device__) || !__Device__)
     {
         return -BadArgs;
     }
@@ -68,7 +68,7 @@ PciEnableMsi(PciDevice* __Device__, uint64_t __Address__, uint32_t __Data__)
 int
 PciDisableMsi(PciDevice* __Device__)
 {
-    if (!__Device__)
+    if (Probe_IF_Error(__Device__) || !__Device__)
     {
         return -BadArgs;
     }

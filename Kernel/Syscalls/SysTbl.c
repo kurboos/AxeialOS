@@ -48,7 +48,7 @@ __Handle__Read(uint64_t __Fd__,
                uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -64,7 +64,7 @@ __Handle__Write(uint64_t __Fd__,
                 uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -80,7 +80,7 @@ __Handle__Writev(uint64_t __Fd__,
                  uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds || !__IovPtr__ || __IovCnt__ <= 0)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds || !__IovPtr__ || __IovCnt__ <= 0)
     {
         return -BadSystemcall;
     }
@@ -92,7 +92,7 @@ __Handle__Writev(uint64_t __Fd__,
     {
         const void* Buf = Iov[I].IovBase;
         long        Len = (long)Iov[I].IovLen;
-        if (!Buf || Len <= 0)
+        if (Probe_IF_Error(Buf) || !Buf || Len <= 0)
         {
             continue;
         }
@@ -120,7 +120,7 @@ __Handle__Readv(uint64_t __Fd__,
                 uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds || !__IovPtr__ || __IovCnt__ <= 0)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds || !__IovPtr__ || __IovCnt__ <= 0)
     {
         return -BadSystemcall;
     }
@@ -132,7 +132,7 @@ __Handle__Readv(uint64_t __Fd__,
     {
         void* Buf = Iov[I].IovBase;
         long  Len = (long)Iov[I].IovLen;
-        if (!Buf || Len <= 0)
+        if (Probe_IF_Error(Buf) || !Buf || Len <= 0)
         {
             continue;
         }
@@ -160,7 +160,7 @@ __Handle__Open(uint64_t __Path__,
                uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -176,7 +176,7 @@ __Handle__Close(uint64_t __Fd__,
                 uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -203,7 +203,7 @@ __Handle__Fstat(uint64_t __Fd__,
                 uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -219,7 +219,7 @@ __Handle__Lseek(uint64_t __Fd__,
                 uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -235,7 +235,7 @@ __Handle__Ioctl(uint64_t __Fd__,
                 uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -269,7 +269,7 @@ __Handle__Pipe(uint64_t __PipefdPtr__,
                uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds || !__PipefdPtr__)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds || !__PipefdPtr__)
     {
         return -BadSystemcall;
     }
@@ -292,7 +292,7 @@ __Handle__Dup(uint64_t __Fd__,
               uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -308,7 +308,7 @@ __Handle__Dup2(uint64_t __OldFd__,
                uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }
@@ -382,7 +382,7 @@ __Handle__Nanosleep(uint64_t __ReqPtr__,
                     uint64_t __U6__)
 {
     __attribute_unused__ uint64_t __unused_rem__ = __RemPtr__;
-    if (!__ReqPtr__)
+    if (Probe_IF_Error(__ReqPtr__) || !__ReqPtr__)
     {
         return -BadSystemcall;
     }
@@ -444,7 +444,7 @@ __Handle__Fork(uint64_t __U1__,
                uint64_t __U6__)
 {
     PosixProc* Parent = __GetCurrentProc__();
-    if (!Parent)
+    if (Probe_IF_Error(Parent) || !Parent)
     {
         return -BadSystemcall;
     }
@@ -462,7 +462,7 @@ __Handle__Execve(uint64_t __Path__,
                  uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc)
+    if (Probe_IF_Error(Proc) || !Proc)
     {
         return -BadSystemcall;
     }
@@ -479,7 +479,7 @@ __Handle__Exit(uint64_t __Status__,
                uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc)
+    if (Probe_IF_Error(Proc) || !Proc)
     {
         return -BadSystemcall;
     }
@@ -496,7 +496,7 @@ __Handle__Wait4(uint64_t __Pid__,
                 uint64_t __U6__)
 {
     PosixProc* Parent = __GetCurrentProc__();
-    if (!Parent)
+    if (Probe_IF_Error(Parent) || !Parent)
     {
         return -BadSystemcall;
     }
@@ -541,7 +541,7 @@ __Handle__Getcwd(uint64_t __Buf__,
                  uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !__Buf__ || __Len__ == 0)
+    if (Probe_IF_Error(Proc) || !Proc || !__Buf__ || __Len__ == 0)
     {
         return -BadSystemcall;
     }
@@ -558,7 +558,7 @@ __Handle__Chdir(uint64_t __Path__,
                 uint64_t __U6__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc)
+    if (Probe_IF_Error(Proc) || !Proc)
     {
         return -BadSystemcall;
     }
@@ -573,7 +573,7 @@ __Handle__Uname(uint64_t __Buf__,
                 uint64_t __U5__,
                 uint64_t __U6__)
 {
-    if (!__Buf__)
+    if (Probe_IF_Error(__Buf__) || !__Buf__)
     {
         return -BadSystemcall;
     }
@@ -600,7 +600,7 @@ __Handle__Gettimeofday(uint64_t __Tv__,
                        uint64_t __U6__)
 {
     __attribute_unused__ uint64_t __unused_tz__ = __Tz__;
-    if (!__Tv__)
+    if (Probe_IF_Error(__Tv__) || !__Tv__)
     {
         return -BadSystemcall;
     }
@@ -623,12 +623,12 @@ __Handle__Times(uint64_t __TmsPtr__,
                 uint64_t __U5__,
                 uint64_t __U6__)
 {
-    if (!__TmsPtr__)
+    if (Probe_IF_Error(__TmsPtr__) || !__TmsPtr__)
     {
         return -BadSystemcall;
     }
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc)
+    if (Probe_IF_Error(Proc) || !Proc)
     {
         return -BadSystemcall;
     }
@@ -654,7 +654,7 @@ __Handle__ClockGettime(uint64_t __ClkId__,
                        uint64_t __U5__,
                        uint64_t __U6__)
 {
-    if (!__Tp__)
+    if (Probe_IF_Error(__Tp__) || !__Tp__)
     {
         return -BadSystemcall;
     }
@@ -719,7 +719,7 @@ __Handle__Mmap(uint64_t __Addr__,
                uint64_t __Off__)
 {
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Space || __Len__ == 0)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Space || __Len__ == 0)
     {
         return -BadSystemcall;
     }
@@ -767,7 +767,7 @@ __Handle__Munmap(uint64_t __Addr__,
     (void)__U6__;
 
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Space || __Addr__ == 0 || __Len__ == 0)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Space || __Addr__ == 0 || __Len__ == 0)
     {
         return -BadSystemcall;
     }
@@ -800,13 +800,13 @@ __Handle__Brk(uint64_t __NewBrk__,
     (void)__U6__;
 
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Space)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Space)
     {
         return -BadSystemcall;
     }
 
     ProcBrkRec* Br = __BrkLookup__(Proc->Pid);
-    if (!Br)
+    if (Probe_IF_Error(Br) || !Br)
     {
         return -BadSystemcall;
     }
@@ -868,7 +868,7 @@ typedef struct PosixPipeT
 static int
 __FdIsReadable__(PosixFdTable* __Tab__, int __Fd__)
 {
-    if (!__Tab__)
+    if (Probe_IF_Error(__Tab__) || !__Tab__)
     {
         return SysOkay;
     }
@@ -901,7 +901,7 @@ __FdIsReadable__(PosixFdTable* __Tab__, int __Fd__)
 static int
 __FdIsWritable__(PosixFdTable* __Tab__, int __Fd__)
 {
-    if (!__Tab__)
+    if (Probe_IF_Error(__Tab__) || !__Tab__)
     {
         return SysOkay;
     }
@@ -934,7 +934,7 @@ __FdIsWritable__(PosixFdTable* __Tab__, int __Fd__)
 static int
 __FdsetTest__(const void* __Set__, int __Fd__)
 {
-    if (!__Set__ || __Fd__ < 0)
+    if (Probe_IF_Error(__Set__) || !__Set__ || __Fd__ < 0)
     {
         return SysOkay;
     }
@@ -945,7 +945,7 @@ __FdsetTest__(const void* __Set__, int __Fd__)
 static void
 __FdsetClear__(void* __Set__, int __Fd__)
 {
-    if (!__Set__ || __Fd__ < 0)
+    if (Probe_IF_Error(__Set__) || !__Set__ || __Fd__ < 0)
     {
         return;
     }
@@ -956,7 +956,7 @@ __FdsetClear__(void* __Set__, int __Fd__)
 static void
 __FdsetSet__(void* __Set__, int __Fd__)
 {
-    if (!__Set__ || __Fd__ < 0)
+    if (Probe_IF_Error(__Set__) || !__Set__ || __Fd__ < 0)
     {
         return;
     }
@@ -975,7 +975,7 @@ __Handle__Select(uint64_t __Nfds__,
     (void)__U6__;
 
     PosixProc* Proc = __GetCurrentProc__();
-    if (!Proc || !Proc->Fds)
+    if (Probe_IF_Error(Proc) || !Proc || !Proc->Fds)
     {
         return -BadSystemcall;
     }

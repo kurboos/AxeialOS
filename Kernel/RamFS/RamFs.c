@@ -16,7 +16,7 @@ RamFSAttachPath(RamFSNode*     __Root__,
     SysErr  err;
     SysErr* Error = &err;
 
-    if (!__Root__ || !__FullPath__)
+    if (Probe_IF_Error(__Root__) || !__Root__ || Probe_IF_Error(__FullPath__) || !__FullPath__)
     {
         return Error_TO_Pointer(-NotCanonical);
     }
@@ -50,7 +50,7 @@ RamFSAttachPath(RamFSNode*     __Root__,
             for (uint32_t I = 0; I < Cur->ChildCount; I++)
             {
                 RamFSNode* C = Cur->Children[I];
-                if (!C || C->Type != RamFSNode_Directory)
+                if (Probe_IF_Error(C) || !C || C->Type != RamFSNode_Directory)
                 {
                     continue;
                 }
@@ -66,10 +66,10 @@ RamFSAttachPath(RamFSNode*     __Root__,
             }
 
             /*Create if missing*/
-            if (!Next)
+            if (Probe_IF_Error(Next) || !Next)
             {
                 char* Name = (char*)KMalloc(SegLen + 1);
-                if (!Name)
+                if (Probe_IF_Error(Name) || !Name)
                 {
                     return Error_TO_Pointer(-BadAlloc);
                 }
@@ -81,7 +81,7 @@ RamFSAttachPath(RamFSNode*     __Root__,
                 Name[SegLen] = '\0';
 
                 Next = RamFSCreateNode(Name, RamFSNode_Directory);
-                if (!Next)
+                if (Probe_IF_Error(Next) || !Next)
                 {
                     return Error_TO_Pointer(-BadAlloc);
                 }
@@ -109,7 +109,7 @@ RamFSAttachPath(RamFSNode*     __Root__,
     for (uint32_t I = 0; I < Cur->ChildCount; I++)
     {
         RamFSNode* C = Cur->Children[I];
-        if (!C)
+        if (Probe_IF_Error(C) || !C)
         {
             continue;
         }
@@ -125,10 +125,10 @@ RamFSAttachPath(RamFSNode*     __Root__,
     }
 
     /*Create leaf if missing*/
-    if (!Leaf)
+    if (Probe_IF_Error(Leaf) || !Leaf)
     {
         char* Name = (char*)KMalloc(LeafLen + 1);
-        if (!Name)
+        if (Probe_IF_Error(Name) || !Name)
         {
             return Error_TO_Pointer(-BadAlloc);
         }
@@ -140,7 +140,7 @@ RamFSAttachPath(RamFSNode*     __Root__,
         Name[LeafLen] = '\0';
 
         Leaf = RamFSCreateNode(Name, __Type__);
-        if (!Leaf)
+        if (Probe_IF_Error(Leaf) || !Leaf)
         {
             return Error_TO_Pointer(-BadAlloc);
         }
@@ -161,7 +161,7 @@ RamFSNode*
 RamFSMount(const void* __Image__, size_t __Length__)
 {
     RamFSNode* Root = RamFSEnsureRoot();
-    if (!Root || !__Image__ || __Length__ == 0)
+    if (Probe_IF_Error(Root) || !Root || Probe_IF_Error(__Image__) || !__Image__ || __Length__ == 0)
     {
         return Error_TO_Pointer(-BadArgs);
     }
@@ -264,7 +264,7 @@ RamFSMount(const void* __Image__, size_t __Length__)
         }
 
         char* FullPath = (char*)KMalloc(RawLen + 2);
-        if (!FullPath)
+        if (Probe_IF_Error(FullPath) || !FullPath)
         {
             return Error_TO_Pointer(-NotCanonical);
         }
@@ -286,7 +286,8 @@ RamFSMount(const void* __Image__, size_t __Length__)
 RamFSNode*
 RamFSLookup(RamFSNode* __Root__, const char* __Path__)
 {
-    if (!__Root__ || !__Path__ || __Path__[0] != '/')
+    if (Probe_IF_Error(__Root__) || !__Root__ || Probe_IF_Error(__Path__) || !__Path__ ||
+        __Path__[0] != '/')
     {
         return Error_TO_Pointer(-BadArgs);
     }
@@ -313,7 +314,7 @@ RamFSLookup(RamFSNode* __Root__, const char* __Path__)
             for (uint32_t I = 0; I < Cur->ChildCount; I++)
             {
                 RamFSNode* C = Cur->Children[I];
-                if (!C)
+                if (Probe_IF_Error(C) || !C)
                 {
                     continue;
                 }
@@ -328,7 +329,7 @@ RamFSLookup(RamFSNode* __Root__, const char* __Path__)
                 }
             }
 
-            if (!Next)
+            if (Probe_IF_Error(Next) || !Next)
             {
                 return Error_TO_Pointer(-Dangling);
                 ;
@@ -352,7 +353,7 @@ RamFSLookup(RamFSNode* __Root__, const char* __Path__)
     for (uint32_t I = 0; I < Cur->ChildCount; I++)
     {
         RamFSNode* C = Cur->Children[I];
-        if (!C)
+        if (Probe_IF_Error(C) || !C)
         {
             continue;
         }
@@ -367,5 +368,4 @@ RamFSLookup(RamFSNode* __Root__, const char* __Path__)
     }
 
     return Error_TO_Pointer(-NoSuch);
-    ;
 }

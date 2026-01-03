@@ -10,8 +10,9 @@ ParseMemoryMap(SysErr* __Err__)
         return;
     }
 
-    Pmm.RegionCount      = 0;
-    uint64_t HighestAddr = 0;
+    Pmm.RegionCount            = 0;
+    uint64_t HighestAddr       = 0;
+    uint64_t TotalUsableMemory = 0;
 
     /*Process each memory map entry*/
     for (uint64_t Index = 0; Index < MemmapRequest.response->entry_count; Index++)
@@ -48,6 +49,11 @@ ParseMemoryMap(SysErr* __Err__)
             HighestAddr = EndAddr;
         }
 
+        if (Entry->type == LIMINE_MEMMAP_USABLE)
+        {
+            TotalUsableMemory += Entry->length;
+        }
+
         Pmm.RegionCount++;
 
         PDebug("Region %lu: 0x%016lx-0x%016lx Type=%u\n",
@@ -58,7 +64,7 @@ ParseMemoryMap(SysErr* __Err__)
     }
 
     /*Calculate total pages in system (round up)*/
-    Pmm.TotalPages = (HighestAddr + PageSize - 1) / PageSize;
+    Pmm.TotalPages = (TotalUsableMemory + PageSize - 1) / PageSize;
     PInfo(
         "Total pages: %lu (%lu MB)\n", Pmm.TotalPages, (Pmm.TotalPages * PageSize) / (1024 * 1024));
 }

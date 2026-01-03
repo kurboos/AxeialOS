@@ -4,7 +4,8 @@
 int
 BlockMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index__)
 {
-    if (!__Out__ || __Cap__ <= 0 || !__Prefix__)
+    if (Probe_IF_Error(__Out__) || !__Out__ || __Cap__ <= 0 || Probe_IF_Error(__Prefix__) ||
+        !__Prefix__)
     {
         return -BadArgs;
     }
@@ -31,7 +32,8 @@ BlockMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index_
 int
 BlockMakePartName(char* __Out__, long __Cap__, const char* __DiskName__, long __PartIndex__)
 {
-    if (!__Out__ || __Cap__ <= 0 || !__DiskName__)
+    if (Probe_IF_Error(__Out__) || !__Out__ || __Cap__ <= 0 || Probe_IF_Error(__DiskName__) ||
+        !__DiskName__)
     {
         return -BadArgs;
     }

@@ -21,10 +21,4 @@ typedef struct
 
 extern ModuleMemoryManager ModMem;
 
-void  ModMemInit(SysErr* __Err__);
-void* ModMalloc(size_t __Size__, int __IsText__);
-void  ModFree(void* __Addr__, size_t __Size__, SysErr* __Err__);
-
-KEXPORT(ModMemInit);
-KEXPORT(ModMalloc);
-KEXPORT(ModFree);
+void ModMemInit(SysErr* __Err__);

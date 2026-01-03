@@ -5,7 +5,7 @@
 void
 PError(const char* __Format__, ...)
 {
-    if (!__Format__)
+    if (Probe_IF_Error(__Format__) || !__Format__)
     {
         __Format__ = "(null)";
     }
@@ -46,7 +46,7 @@ PError(const char* __Format__, ...)
 void
 PWarn(const char* __Format__, ...)
 {
-    if (!__Format__)
+    if (Probe_IF_Error(__Format__) || !__Format__)
     {
         __Format__ = "(null)";
     }
@@ -87,7 +87,7 @@ PWarn(const char* __Format__, ...)
 void
 PInfo(const char* __Format__, ...)
 {
-    if (!__Format__)
+    if (Probe_IF_Error(__Format__) || !__Format__)
     {
         __Format__ = "(null)";
     }
@@ -128,7 +128,7 @@ PInfo(const char* __Format__, ...)
 void
 _PDebug(const char* __Format__, ...)
 {
-    if (!__Format__)
+    if (Probe_IF_Error(__Format__) || !__Format__)
     {
         __Format__ = "(null)";
     }
@@ -166,7 +166,7 @@ _PDebug(const char* __Format__, ...)
 void
 PSuccess(const char* __Format__, ...)
 {
-    if (!__Format__)
+    if (Probe_IF_Error(__Format__) || !__Format__)
     {
         __Format__ = "(null)";
     }

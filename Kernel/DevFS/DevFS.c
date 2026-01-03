@@ -77,7 +77,7 @@ typedef struct DevFsNodePriv
 static long
 __dev_index__(const char* __Name__)
 {
-    if (!__Name__)
+    if (Probe_IF_Error(__Name__) || !__Name__)
     {
         return -BadArgs;
     }
@@ -114,7 +114,7 @@ DevFsRegisterCharDevice(const char* __Name__,
                         CharDevOps  __Ops__,
                         void*       __Context__)
 {
-    if (!__Name__)
+    if (Probe_IF_Error(__Name__) || !__Name__)
     {
         return -NotCanonical;
     }
@@ -130,7 +130,7 @@ DevFsRegisterCharDevice(const char* __Name__,
     }
 
     DeviceEntry* E = (DeviceEntry*)KMalloc(sizeof(DeviceEntry));
-    if (!E)
+    if (Probe_IF_Error(E) || !E)
     {
         return -BadAlloc;
     }
@@ -142,7 +142,7 @@ DevFsRegisterCharDevice(const char* __Name__,
 
     const long CapName   = 255; /*uint8 Max*/
     char*      NameStore = (char*)KMalloc(CapName + 1);
-    if (!NameStore)
+    if (Probe_IF_Error(NameStore) || !NameStore)
     {
         KFree(E, Error);
         return -BadAlloc;
@@ -170,7 +170,7 @@ DevFsRegisterBlockDevice(const char* __Name__,
                          BlockDevOps __Ops__,
                          void*       __Context__)
 {
-    if (!__Name__)
+    if (Probe_IF_Error(__Name__) || !__Name__)
     {
         return -NotCanonical;
     }
@@ -186,7 +186,7 @@ DevFsRegisterBlockDevice(const char* __Name__,
     }
 
     DeviceEntry* E = (DeviceEntry*)KMalloc(sizeof(DeviceEntry));
-    if (!E)
+    if (Probe_IF_Error(E) || !E)
     {
         return -BadAlloc;
     }
@@ -245,20 +245,20 @@ DevFsMountImpl(const char* __Dev__ __attribute__((unused)),
 
     /* Allocate superblock and root directory vnode */
     Superblock* Sb = (Superblock*)KMalloc(sizeof(Superblock));
-    if (!Sb)
+    if (Probe_IF_Error(Sb) || !Sb)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
 
     Vnode* Root = (Vnode*)KMalloc(sizeof(Vnode));
-    if (!Root)
+    if (Probe_IF_Error(Root) || !Root)
     {
         KFree(Sb, Error);
         return Error_TO_Pointer(-BadAlloc);
     }
 
     DevFsRootPriv* RPriv = (DevFsRootPriv*)KMalloc(sizeof(DevFsRootPriv));
-    if (!RPriv)
+    if (Probe_IF_Error(RPriv) || !RPriv)
     {
         KFree(Root, Error);
         KFree(Sb, Error);
@@ -287,7 +287,7 @@ DevFsMountImpl(const char* __Dev__ __attribute__((unused)),
 static int
 DevVfsOpen(Vnode* __Node__, File* __File__)
 {
-    if (!__Node__ || !__File__)
+    if (Probe_IF_Error(__Node__) || !__Node__ || Probe_IF_Error(__File__) || !__File__)
     {
         return -BadArgs;
     }
@@ -304,13 +304,13 @@ DevVfsOpen(Vnode* __Node__, File* __File__)
     if (__Node__->Type == VNodeDEV)
     {
         DevFsNodePriv* NPriv = (DevFsNodePriv*)__Node__->Priv;
-        if (!NPriv || !NPriv->Dev)
+        if (Probe_IF_Error(NPriv) || !NPriv || Probe_IF_Error(NPriv->Dev) || !NPriv->Dev)
         {
             return -Dangling;
         }
 
         DevFsFileCtx* FC = (DevFsFileCtx*)KMalloc(sizeof(DevFsFileCtx));
-        if (!FC)
+        if (Probe_IF_Error(FC) || !FC)
         {
             return -BadAlloc;
         }
@@ -343,7 +343,7 @@ DevVfsOpen(Vnode* __Node__, File* __File__)
 static int
 DevVfsClose(File* __File__)
 {
-    if (!__File__)
+    if (Probe_IF_Error(__File__) || !__File__)
     {
         return -BadArgs;
     }
@@ -374,13 +374,14 @@ DevVfsClose(File* __File__)
 static long
 DevVfsRead(File* __File__, void* __Buf__, long __Len__)
 {
-    if (!__File__ || !__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__File__) || !__File__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }
 
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
-    if (!FC || !FC->Dev)
+    if (Probe_IF_Error(FC) || !FC || Probe_IF_Error(FC->Dev) || !FC->Dev)
     {
         return -Dangling;
     }
@@ -430,7 +431,7 @@ DevVfsRead(File* __File__, void* __Buf__, long __Len__)
 
             /* Read one block into a temporary buffer then copy slice */
             void* Tmp = KMalloc((size_t)Blk);
-            if (!Tmp)
+            if (Probe_IF_Error(Tmp) || !Tmp)
             {
                 return (Total > 0) ? Total : -BadAlloc;
             }
@@ -466,13 +467,14 @@ DevVfsRead(File* __File__, void* __Buf__, long __Len__)
 static long
 DevVfsWrite(File* __File__, const void* __Buf__, long __Len__)
 {
-    if (!__File__ || !__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__File__) || !__File__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }
 
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
-    if (!FC || !FC->Dev)
+    if (Probe_IF_Error(FC) || !FC || Probe_IF_Error(FC->Dev) || !FC->Dev)
     {
         return -Dangling;
     }
@@ -518,7 +520,7 @@ DevVfsWrite(File* __File__, const void* __Buf__, long __Len__)
             }
 
             void* Tmp = KMalloc((size_t)Blk);
-            if (!Tmp)
+            if (Probe_IF_Error(Tmp) || !Tmp)
             {
                 return (Total > 0) ? Total : -BadAlloc;
             }
@@ -560,13 +562,13 @@ DevVfsWrite(File* __File__, const void* __Buf__, long __Len__)
 static long
 DevVfsLseek(File* __File__, long __Off__, int __Whence__)
 {
-    if (!__File__)
+    if (Probe_IF_Error(__File__) || !__File__)
     {
         return -BadArgs;
     }
 
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
-    if (!FC || !FC->Dev)
+    if (Probe_IF_Error(FC) || !FC || Probe_IF_Error(FC->Dev) || !FC->Dev)
     {
         return -Dangling;
     }
@@ -625,12 +627,12 @@ DevVfsLseek(File* __File__, long __Off__, int __Whence__)
 static int
 DevVfsIoctl(File* __File__, unsigned long __Cmd__, void* __Arg__ /*Could have used Vargs*/)
 {
-    if (!__File__)
+    if (Probe_IF_Error(__File__) || !__File__)
     {
         return -BadEntity;
     }
     DevFsFileCtx* FC = (DevFsFileCtx*)__File__->Priv;
-    if (!FC || !FC->Dev)
+    if (Probe_IF_Error(FC) || !FC || Probe_IF_Error(FC->Dev) || !FC->Dev)
     {
         return -Dangling;
     }
@@ -659,7 +661,7 @@ DevVfsIoctl(File* __File__, unsigned long __Cmd__, void* __Arg__ /*Could have us
 static int
 DevVfsStat(Vnode* __Node__, VfsStat* __Out__)
 {
-    if (!__Node__ || !__Out__)
+    if (Probe_IF_Error(__Node__) || !__Node__ || Probe_IF_Error(__Out__) || !__Out__)
     {
         return -BadArgs;
     }
@@ -706,7 +708,8 @@ DevVfsStat(Vnode* __Node__, VfsStat* __Out__)
 static long
 DevVfsReaddir(Vnode* __Dir__, void* __Buf__, long __BufLen__)
 {
-    if (!__Dir__ || !__Buf__ || __BufLen__ <= 0)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __BufLen__ <= 0)
     {
         return -BadArgs;
     }
@@ -747,7 +750,7 @@ DevVfsReaddir(Vnode* __Dir__, void* __Buf__, long __BufLen__)
     for (long I = 0; I < __DevCount__ && Wrote < Max; I++)
     {
         DeviceEntry* E = __DevTable__[I];
-        if (!E)
+        if (Probe_IF_Error(E) || !E)
         {
             continue;
         }
@@ -773,7 +776,7 @@ DevVfsReaddir(Vnode* __Dir__, void* __Buf__, long __BufLen__)
 static Vnode*
 DevVfsLookup(Vnode* __Dir__, const char* __Name__)
 {
-    if (!__Dir__ || !__Name__)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || Probe_IF_Error(__Name__) || !__Name__)
     {
         return Error_TO_Pointer(-BadArgs);
     }
@@ -783,13 +786,13 @@ DevVfsLookup(Vnode* __Dir__, const char* __Name__)
     }
 
     DeviceEntry* E = __dev_find__(__Name__);
-    if (!E)
+    if (Probe_IF_Error(E) || !E)
     {
         return Error_TO_Pointer(-NoSuch);
     }
 
     Vnode* V = (Vnode*)KMalloc(sizeof(Vnode));
-    if (!V)
+    if (Probe_IF_Error(V) || !V)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
@@ -798,7 +801,7 @@ DevVfsLookup(Vnode* __Dir__, const char* __Name__)
     SysErr* Error = &err;
 
     DevFsNodePriv* NPriv = (DevFsNodePriv*)KMalloc(sizeof(DevFsNodePriv));
-    if (!NPriv)
+    if (Probe_IF_Error(NPriv) || !NPriv)
     {
         KFree(V, Error);
         return Error_TO_Pointer(-BadAlloc);
@@ -841,7 +844,7 @@ DevVfsSuperSync(Superblock* __Sb__)
 static int
 DevVfsSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__)
 {
-    if (!__Sb__ || !__Out__)
+    if (Probe_IF_Error(__Sb__) || !__Sb__ || Probe_IF_Error(__Out__) || !__Out__)
     {
         return -BadArgs;
     }
@@ -860,7 +863,7 @@ DevVfsSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__)
 static void
 DevVfsSuperRelease(Superblock* __Sb__, SysErr* __Err__)
 {
-    if (!__Sb__)
+    if (Probe_IF_Error(__Sb__) || !__Sb__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -917,7 +920,7 @@ __null_ioctl__(void* __Ctx__, unsigned long __Cmd__, void* __Arg__)
 static long
 __zero_read__(void* __Ctx__, void* __Buf__, long __Len__)
 {
-    if (!__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__Buf__) || !__Buf__ || __Len__ <= 0)
     {
         return -BadArgs;
     }

@@ -4,7 +4,7 @@
 size_t
 RamFSRead(RamFSNode* __Node__, size_t __Offset__, void* __Buffer__, size_t __Length__)
 {
-    if (!__Node__ || !__Buffer__)
+    if (Probe_IF_Error(__Node__) || !__Node__ || Probe_IF_Error(__Buffer__) || !__Buffer__)
     {
         return Nothing;
     }
@@ -40,7 +40,7 @@ RamFSRead(RamFSNode* __Node__, size_t __Offset__, void* __Buffer__, size_t __Len
 int
 RamFSExists(const char* __Path__)
 {
-    if (!__Path__ || !RamFS.Root)
+    if (Probe_IF_Error(__Path__) || !__Path__ || !RamFS.Root)
     {
         return -BadArgs;
     }
@@ -57,13 +57,13 @@ RamFSExists(const char* __Path__)
 int
 RamFSIsDir(const char* __Path__)
 {
-    if (!__Path__ || !RamFS.Root)
+    if (Probe_IF_Error(__Path__) || !__Path__ || !RamFS.Root)
     {
         return -NotCanonical;
     }
 
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
-    if (!Node)
+    if (Probe_IF_Error(Node) || !Node)
     {
         return -CannotLookup;
     }
@@ -74,13 +74,13 @@ RamFSIsDir(const char* __Path__)
 int
 RamFSIsFile(const char* __Path__)
 {
-    if (!__Path__ || !RamFS.Root)
+    if (Probe_IF_Error(__Path__) || !__Path__ || !RamFS.Root)
     {
         return -NotCanonical;
     }
 
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
-    if (!Node)
+    if (Probe_IF_Error(Node) || !Node)
     {
         return -CannotLookup;
     }
@@ -91,13 +91,13 @@ RamFSIsFile(const char* __Path__)
 uint32_t
 RamFSGetSize(const char* __Path__)
 {
-    if (!__Path__ || !RamFS.Root)
+    if (Probe_IF_Error(__Path__) || !__Path__ || !RamFS.Root)
     {
         return Nothing;
     }
 
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
-    if (!Node || Node->Type != RamFSNode_File)
+    if (Probe_IF_Error(Node) || !Node || Node->Type != RamFSNode_File)
     {
         return Nothing;
     }
@@ -108,7 +108,8 @@ RamFSGetSize(const char* __Path__)
 uint32_t
 RamFSListChildren(RamFSNode* __Dir__, RamFSNode** __Buffer__, uint32_t __MaxCount__)
 {
-    if (!__Dir__ || !__Buffer__ || __MaxCount__ == 0)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || Probe_IF_Error(__Buffer__) || !__Buffer__ ||
+        __MaxCount__ == 0)
     {
         return Nothing;
     }
@@ -135,13 +136,14 @@ RamFSListChildren(RamFSNode* __Dir__, RamFSNode** __Buffer__, uint32_t __MaxCoun
 size_t
 RamFSReadFile(const char* __Path__, void* __Buffer__)
 {
-    if (!__Path__ || !__Buffer__ || !RamFS.Root)
+    if (Probe_IF_Error(__Path__) || !__Path__ || Probe_IF_Error(__Buffer__) || !__Buffer__ ||
+        !RamFS.Root)
     {
         return Nothing;
     }
 
     RamFSNode* Node = RamFSLookup(RamFS.Root, __Path__);
-    if (!Node || Node->Type != RamFSNode_File)
+    if (Probe_IF_Error(Node) || !Node || Node->Type != RamFSNode_File)
     {
         return Nothing;
     }
@@ -153,7 +155,7 @@ RamFSReadFile(const char* __Path__, void* __Buffer__)
 RamFSNode*
 RamFSGetChildByIndex(RamFSNode* __Dir__, uint32_t __Index__)
 {
-    if (!__Dir__ || __Dir__->Type != RamFSNode_Directory)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || __Dir__->Type != RamFSNode_Directory)
     {
         return Error_TO_Pointer(-BadEntity);
     }
@@ -169,7 +171,7 @@ RamFSGetChildByIndex(RamFSNode* __Dir__, uint32_t __Index__)
 char*
 RamFSJoinPath(const char* __DirPath__, const char* __Name__)
 {
-    if (!__DirPath__ || !__Name__)
+    if (Probe_IF_Error(__DirPath__) || !__DirPath__ || Probe_IF_Error(__Name__) || !__Name__)
     {
         return Error_TO_Pointer(-BadArgs);
     }
@@ -194,7 +196,7 @@ RamFSJoinPath(const char* __DirPath__, const char* __Name__)
     /* Allocate buffer: dir + optional '/' + name + NUL */
     uint32_t Total = LDir + (NeedSlash ? 1 : 0) + LNam + 1;
     char*    Out   = (char*)KMalloc(Total);
-    if (!Out)
+    if (Probe_IF_Error(Out) || !Out)
     {
         return Error_TO_Pointer(-BadArgs);
     }

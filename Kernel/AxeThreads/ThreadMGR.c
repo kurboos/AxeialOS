@@ -99,7 +99,7 @@ CreateThread(ThreadType     __Type__,
     SysErr  err;
     SysErr* Error     = &err;
     Thread* NewThread = (Thread*)KMalloc(sizeof(Thread));
-    if (!NewThread)
+    if (Probe_IF_Error(NewThread) || !NewThread)
     {
         ReleaseSpinLock(&ThreadListLock, Error);
         return Error_TO_Pointer(-BadAlloc);
@@ -126,7 +126,7 @@ CreateThread(ThreadType     __Type__,
     if (__Type__ == ThreadTypeKernel)
     {
         void* KernelStackBase = KMalloc(8192);
-        if (!KernelStackBase)
+        if (Probe_IF_Error(KernelStackBase) || !KernelStackBase)
         {
             KFree(NewThread, Error);
             ReleaseSpinLock(&ThreadListLock, Error);
@@ -146,7 +146,8 @@ CreateThread(ThreadType     __Type__,
     {
         void* KernelStackBase = KMalloc(8192);
         void* UserStackBase   = KMalloc(8192);
-        if (!KernelStackBase || !UserStackBase)
+        if (Probe_IF_Error(KernelStackBase) || !KernelStackBase || Probe_IF_Error(UserStackBase) ||
+            !UserStackBase)
         {
             if (KernelStackBase)
             {
@@ -224,7 +225,7 @@ CreateThread(ThreadType     __Type__,
 void
 DestroyThread(Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -268,7 +269,7 @@ DestroyThread(Thread* __ThreadPtr__, SysErr* __Err__)
 void
 SuspendThread(Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -292,7 +293,7 @@ SuspendThread(Thread* __ThreadPtr__, SysErr* __Err__)
 void
 ResumeThread(Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -311,7 +312,7 @@ ResumeThread(Thread* __ThreadPtr__, SysErr* __Err__)
 void
 SetThreadPriority(Thread* __ThreadPtr__, ThreadPriority __Priority__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -325,7 +326,7 @@ SetThreadPriority(Thread* __ThreadPtr__, ThreadPriority __Priority__, SysErr* __
 void
 SetThreadAffinity(Thread* __ThreadPtr__, uint32_t __CpuMask__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -369,7 +370,7 @@ FindLeastLoadedCpu(void)
 uint32_t
 CalculateOptimalCpu(Thread* __ThreadPtr__)
 {
-    if (!__ThreadPtr__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         return Nothing;
     }
@@ -385,7 +386,7 @@ CalculateOptimalCpu(Thread* __ThreadPtr__)
             if (__ThreadPtr__->CpuAffinity & (1 << CpuIndex))
             {
                 uint32_t Load = GetCpuLoad(CpuIndex);
-                if (!FoundValidCpu || Load < MinLoad)
+                if (Probe_IF_Error(FoundValidCpu) || !FoundValidCpu || Load < MinLoad)
                 {
                     MinLoad       = Load;
                     BestCpu       = CpuIndex;
@@ -403,7 +404,7 @@ CalculateOptimalCpu(Thread* __ThreadPtr__)
 void
 ThreadExecute(Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -429,7 +430,7 @@ ThreadExecute(Thread* __ThreadPtr__, SysErr* __Err__)
 void
 ThreadExecuteMultiple(Thread** __ThreadArray__, uint32_t __ThreadCount__, SysErr* __Err__)
 {
-    if (!__ThreadArray__ || __ThreadCount__ == 0)
+    if (Probe_IF_Error(__ThreadArray__) || !__ThreadArray__ || __ThreadCount__ == 0)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -438,7 +439,7 @@ ThreadExecuteMultiple(Thread** __ThreadArray__, uint32_t __ThreadCount__, SysErr
     for (uint32_t ThreadIndex = 0; ThreadIndex < __ThreadCount__; ThreadIndex++)
     {
         Thread* ThreadPtr = __ThreadArray__[ThreadIndex];
-        if (!ThreadPtr)
+        if (Probe_IF_Error(ThreadPtr) || !ThreadPtr)
         {
             continue;
         }
@@ -597,7 +598,7 @@ ThreadExit(uint32_t __ExitCode__, SysErr* __Err__)
     uint32_t CpuId   = GetCurrentCpuId();
     Thread*  Current = GetCurrentThread(CpuId);
 
-    if (!Current || Probe_IF_Error(Current))
+    if (Probe_IF_Error(Current) || !Current || Probe_IF_Error(Current))
     {
         SlotError(__Err__, -NoOperations);
         return;
@@ -678,7 +679,7 @@ WakeSleepingThreads(SysErr* __Err__)
 void
 DumpThreadInfo(Thread* __ThreadPtr__, SysErr* __Err__)
 {
-    if (!__ThreadPtr__)
+    if (Probe_IF_Error(__ThreadPtr__) || !__ThreadPtr__)
     {
         SlotError(__Err__, -BadArgs);
         return;

@@ -6,7 +6,7 @@
 void
 PciDumpDevice(PciDevice* __Device__, SysErr* __Err__)
 {
-    if (!__Device__)
+    if (Probe_IF_Error(__Device__) || !__Device__)
     {
         SlotError(__Err__, -BadArgs);
         return;

@@ -62,7 +62,7 @@ __Min__(long a, long IdxUal)
 char
 __ProcStateCode__(PosixProc* __Proc__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return 'X';
     } /* dead/invalid */
@@ -72,7 +72,7 @@ __ProcStateCode__(PosixProc* __Proc__)
     } /* zombie */
 
     Thread* T = __Proc__->MainThread;
-    if (!T)
+    if (Probe_IF_Error(T) || !T)
     {
         return 'X';
     }
@@ -101,7 +101,7 @@ __CurrentProc__(void)
 {
     uint32_t CPU  = GetCurrentCpuId();
     Thread*  Thrd = GetCurrentThread(CPU);
-    if (!Thrd)
+    if (Probe_IF_Error(Thrd) || !Thrd)
     {
         return Error_TO_Pointer(-BadEntity);
     }
@@ -119,7 +119,7 @@ PosixProcCreate(void)
     }
 
     PosixProc* Proc = __AllocProc__();
-    if (!Proc)
+    if (Probe_IF_Error(Proc) || !Proc)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
@@ -153,7 +153,7 @@ PosixProcCreate(void)
     }
 
     Proc->Space = VirtCreateSpace();
-    if (!Proc->Space)
+    if (Probe_IF_Error(Proc->Space) || !Proc->Space)
     {
         __FreeProc__(Proc, Error);
         return Error_TO_Pointer(-NotCanonical);
@@ -185,7 +185,8 @@ PosixProcExecve(PosixProc*         __Proc__,
     SysErr  err;
     SysErr* Error = &err;
 
-    if (!__Proc__ || !__Path__ || __Path__[0] == '\0')
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Path__) || !__Path__ ||
+        __Path__[0] == '\0')
     {
         return -BadArgs;
     }
@@ -198,7 +199,7 @@ PosixProcExecve(PosixProc*         __Proc__,
 
     /*Select the loader*/
     const DynLoader* Loader = DynLoaderSelect(F);
-    if (!Loader)
+    if (Probe_IF_Error(Loader) || !Loader)
     {
         VfsClose(F);
         return -NoSuch;
@@ -211,7 +212,7 @@ PosixProcExecve(PosixProc*         __Proc__,
         return Err;
     }
 
-    if (!__Proc__->Space || __Proc__->Space->PhysicalBase == 0)
+    if (Probe_IF_Error(__Proc__->Space) || !__Proc__->Space || __Proc__->Space->PhysicalBase == 0)
     {
         VfsClose(F);
         return -NotCanonical;
@@ -249,10 +250,10 @@ PosixProcExecve(PosixProc*         __Proc__,
         return -ErrReturn;
     }
 
-    if (!__Proc__->MainThread)
+    if (Probe_IF_Error(__Proc__->MainThread) || !__Proc__->MainThread)
     {
         Thread* Th = CreateThread(ThreadTypeUser, (void*)Img.Entry, NULL, ThreadPrioritykernel);
-        if (!Th)
+        if (Probe_IF_Error(Th) || !Th)
         {
             return -BadEntity;
         }
@@ -316,7 +317,9 @@ __IsUserVa__(uint64_t __Va__)
 long
 PosixFork(PosixProc* __Parent__, PosixProc** __OutChild__)
 {
-    if (!__Parent__ || !__OutChild__ || !__Parent__->MainThread || !__Parent__->Space)
+    if (Probe_IF_Error(__Parent__) || !__Parent__ || Probe_IF_Error(__OutChild__) ||
+        !__OutChild__ || Probe_IF_Error(__Parent__->MainThread) || !__Parent__->MainThread ||
+        Probe_IF_Error(__Parent__->Space) || !__Parent__->Space)
     {
         return -1;
     }
@@ -329,7 +332,7 @@ PosixFork(PosixProc* __Parent__, PosixProc** __OutChild__)
     }
 
     PosixProc* Child = PosixProcCreate();
-    if (!Child)
+    if (Probe_IF_Error(Child) || !Child)
     {
         return -BadEntity;
     }
@@ -349,7 +352,7 @@ PosixFork(PosixProc* __Parent__, PosixProc** __OutChild__)
 
     Thread* Pth = __Parent__->MainThread;
     Thread* Cth = CreateThread(ThreadTypeUser, (void*)__ParentRip__, NULL, Pth->Priority);
-    if (!Cth)
+    if (Probe_IF_Error(Cth) || !Cth)
     {
         PosixExit(Child, -1);
         return -BadEntity;
@@ -467,7 +470,7 @@ PosixFork(PosixProc* __Parent__, PosixProc** __OutChild__)
 int
 PosixExit(PosixProc* __Proc__, int __Status__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return -BadArgs;
     }
@@ -526,7 +529,7 @@ PosixWait4(PosixProc*   __Parent__,
            int          __Options__,
            PosixRusage* __OutUsage__)
 {
-    if (!__Parent__)
+    if (Probe_IF_Error(__Parent__) || !__Parent__)
     {
         return -BadEntity;
     }
@@ -538,7 +541,7 @@ PosixWait4(PosixProc*   __Parent__,
         for (long I = 1; I <= MaxProcs; I++)
         {
             PosixProc* P = PosixFind(I);
-            if (!P || P->Ppid != __Parent__->Pid)
+            if (Probe_IF_Error(P) || !P || P->Ppid != __Parent__->Pid)
             {
                 continue;
             }
@@ -594,7 +597,7 @@ PosixWait4(PosixProc*   __Parent__,
 int
 PosixSetSid(PosixProc* __Proc__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return -BadArgs;
     }
@@ -606,7 +609,7 @@ PosixSetSid(PosixProc* __Proc__)
 int
 PosixSetPgrp(PosixProc* __Proc__, long __Pgid__)
 {
-    if (!__Proc__ || __Pgid__ <= 0)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || __Pgid__ <= 0)
     {
         return -BadArgs;
     }
@@ -638,7 +641,7 @@ PosixGetSid(PosixProc* __Proc__)
 int
 PosixChdir(PosixProc* __Proc__, const char* __Path__)
 {
-    if (!__Proc__ || !__Path__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Path__) || !__Path__)
     {
         return -BadArgs;
     }
@@ -653,7 +656,8 @@ PosixChdir(PosixProc* __Proc__, const char* __Path__)
 int
 PosixFchdir(PosixProc* __Proc__, int __Fd__)
 {
-    if (!__Proc__ || __Fd__ < 0 || !__Proc__->Fds)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || __Fd__ < 0 || Probe_IF_Error(__Proc__->Fds) ||
+        !__Proc__->Fds)
     {
         return -BadArgs;
     }
@@ -674,7 +678,7 @@ PosixFchdir(PosixProc* __Proc__, int __Fd__)
 int
 PosixSetUmask(PosixProc* __Proc__, long __Mask__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return -BadEntity;
     }
@@ -685,11 +689,12 @@ PosixSetUmask(PosixProc* __Proc__, long __Mask__)
 int
 PosixGetTty(PosixProc* __Proc__, char* __Out__, long __Len__)
 {
-    if (!__Proc__ || !__Out__ || __Len__ <= 0)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Out__) || !__Out__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }
-    if (!__Proc__->TtyName)
+    if (Probe_IF_Error(__Proc__->TtyName) || !__Proc__->TtyName)
     {
         strcpy(__Out__, "notty", (uint32_t)__Len__);
     }
@@ -704,7 +709,7 @@ int
 PosixKill(long __Pid__, int __Sig__)
 {
     PosixProc* P = PosixFind(__Pid__);
-    if (!P)
+    if (Probe_IF_Error(P) || !P)
     {
         return -NoSuch;
     }
@@ -718,7 +723,7 @@ PosixTkill(long __Tid__, int __Sig__)
 {
     /* Map TID to thread->ProcessId then call kill */
     Thread* Th = FindThreadById((uint32_t)__Tid__);
-    if (!Th)
+    if (Probe_IF_Error(Th) || !Th)
     {
         return -BadEntity;
     }
@@ -734,7 +739,7 @@ PosixSigaction(int __Sig__, const PosixSigAction* __Act__, PosixSigAction* __Old
     }
 
     PosixProc* P = __CurrentProc__();
-    if (!P || !P->MainThread)
+    if (Probe_IF_Error(P) || !P || Probe_IF_Error(P->MainThread) || !P->MainThread)
     {
         return -BadEntity;
     }
@@ -761,7 +766,7 @@ int
 PosixSigprocmask(int __How__, const uint64_t* __Set__, uint64_t* __OldSet__)
 {
     PosixProc* P = __CurrentProc__();
-    if (!P)
+    if (Probe_IF_Error(P) || !P)
     {
         return -BadEntity;
     }
@@ -769,7 +774,7 @@ PosixSigprocmask(int __How__, const uint64_t* __Set__, uint64_t* __OldSet__)
     {
         *__OldSet__ = P->SigMask;
     }
-    if (!__Set__)
+    if (Probe_IF_Error(__Set__) || !__Set__)
     {
         return SysOkay;
     }
@@ -793,12 +798,12 @@ PosixSigprocmask(int __How__, const uint64_t* __Set__, uint64_t* __OldSet__)
 int
 PosixSigpending(uint64_t* __OutMask__)
 {
-    if (!__OutMask__)
+    if (Probe_IF_Error(__OutMask__) || !__OutMask__)
     {
         return -BadArgs;
     }
     PosixProc* P = __CurrentProc__();
-    if (!P)
+    if (Probe_IF_Error(P) || !P)
     {
         *__OutMask__ = 0;
         return SysOkay;
@@ -830,7 +835,7 @@ PosixDeliverSignals(void)
     for (long I = 1; I <= MaxProcs; I++)
     {
         PosixProc* P = PosixFind(I);
-        if (!P)
+        if (Probe_IF_Error(P) || !P)
         {
             continue;
         }
@@ -937,7 +942,7 @@ __AllocProc__(void)
     SysErr     err;
     SysErr*    Error = &err;
     PosixProc* P     = (PosixProc*)KMalloc(sizeof(PosixProc));
-    if (!P)
+    if (Probe_IF_Error(P) || !P)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
@@ -947,7 +952,8 @@ __AllocProc__(void)
     /* allocate cmdline/environ buffers */
     P->CmdlineBuf = (char*)KMalloc(4096);
     P->EnvironBuf = (char*)KMalloc(8192);
-    if (!P->CmdlineBuf || !P->EnvironBuf)
+    if (Probe_IF_Error(P->CmdlineBuf) || !P->CmdlineBuf || Probe_IF_Error(P->EnvironBuf) ||
+        !P->EnvironBuf)
     {
         if (P->CmdlineBuf)
         {
@@ -969,7 +975,7 @@ __AllocProc__(void)
 static void
 __FreeProc__(PosixProc* __Proc__, SysErr* __Err__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -1015,7 +1021,7 @@ __FreeProc__(PosixProc* __Proc__, SysErr* __Err__)
 static int
 __AttachThread__(PosixProc* __Proc__, Thread* __Th__)
 {
-    if (!__Proc__ || !__Th__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Th__) || !__Th__)
     {
         return -BadArgs;
     }
@@ -1027,7 +1033,7 @@ __AttachThread__(PosixProc* __Proc__, Thread* __Th__)
 static int
 __DetachThread__(PosixProc* __Proc__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return -BadArgs;
     }
@@ -1046,7 +1052,8 @@ __DetachThread__(PosixProc* __Proc__)
 static int
 __ForkCopyFds__(PosixProc* __Parent__, PosixProc* __Child__)
 {
-    if (!__Parent__ || !__Parent__->Fds || !__Child__)
+    if (Probe_IF_Error(__Parent__) || !__Parent__ || Probe_IF_Error(__Parent__->Fds) ||
+        !__Parent__->Fds || Probe_IF_Error(__Child__) || !__Child__)
     {
         return -BadArgs;
     }
@@ -1062,7 +1069,7 @@ __ForkCopyFds__(PosixProc* __Parent__, PosixProc* __Child__)
     __Child__->Times.StartTick = __Parent__->Times.StartTick;
 
     __Child__->Fds = (PosixFdTable*)KMalloc(sizeof(PosixFdTable));
-    if (!__Child__->Fds)
+    if (Probe_IF_Error(__Child__->Fds) || !__Child__->Fds)
     {
         return -BadAlloc;
     }
@@ -1125,13 +1132,13 @@ __ForkCopyFds__(PosixProc* __Parent__, PosixProc* __Child__)
 static int
 __SetDefaultFds__(PosixProc* __Proc__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return -BadArgs;
     }
 
     __Proc__->Fds = (PosixFdTable*)KMalloc(sizeof(PosixFdTable));
-    if (!__Proc__->Fds)
+    if (Probe_IF_Error(__Proc__->Fds) || !__Proc__->Fds)
     {
         return -BadAlloc;
     }
@@ -1200,7 +1207,7 @@ __BuildArgsEnv__(const char* const* __Argv__,
                  const char*        __Path__,
                  PosixProc*         __Proc__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return -BadEntity;
     }
@@ -1297,12 +1304,12 @@ __UpdateTimesOnExit__(PosixProc* __Proc__)
 static int
 __ResolveExecFile__(const char* __Path__, File** __OutFile__)
 {
-    if (!__Path__ || !__OutFile__)
+    if (Probe_IF_Error(__Path__) || !__Path__ || Probe_IF_Error(__OutFile__) || !__OutFile__)
     {
         return -BadArgs;
     }
     File* f = VfsOpen(__Path__, VFlgRDONLY);
-    if (!f)
+    if (Probe_IF_Error(f) || !f)
     {
         return -BadEntity;
     }
@@ -1313,7 +1320,7 @@ __ResolveExecFile__(const char* __Path__, File** __OutFile__)
 __attribute_unused__ static int
 __EnsureCwdRoot__(PosixProc* __Proc__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return -BadArgs;
     }
@@ -1331,7 +1338,7 @@ __EnsureCwdRoot__(PosixProc* __Proc__)
 static void
 __WakeParent__(PosixProc* __Parent__, PosixProc* __Child__, SysErr* __Err__)
 {
-    if (!__Parent__ || !__Child__)
+    if (Probe_IF_Error(__Parent__) || !__Parent__ || Probe_IF_Error(__Child__) || !__Child__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -1343,7 +1350,7 @@ __WakeParent__(PosixProc* __Parent__, PosixProc* __Child__, SysErr* __Err__)
 static int
 __DeliverPendingSignals__(PosixProc* __Proc__)
 {
-    if (!__Proc__)
+    if (Probe_IF_Error(__Proc__) || !__Proc__)
     {
         return -BadArgs;
     }

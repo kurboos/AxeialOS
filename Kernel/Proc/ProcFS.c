@@ -60,7 +60,7 @@ int
 ProcFsNotifyProcAdded(PosixProc* __Proc__)
 {
 
-    if (!__Proc__ || __Proc__->Pid <= 0 || __Proc__->Pid >= ProcMaxPIDS)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || __Proc__->Pid <= 0 || __Proc__->Pid >= ProcMaxPIDS)
     {
         return -BadEntry;
     }
@@ -81,7 +81,7 @@ ProcFsNotifyProcAdded(PosixProc* __Proc__)
     UnsignedToStringEx((uint64_t)__Proc__->Pid, Num, 10, 0);
 
     ProcFsNode* D = (ProcFsNode*)KMalloc(sizeof(ProcFsNode));
-    if (!D)
+    if (Probe_IF_Error(D) || !D)
     {
         ReleaseSpinLock(&ProcPriv->Lock, Error);
         return -BadAlloc;
@@ -89,7 +89,7 @@ ProcFsNotifyProcAdded(PosixProc* __Proc__)
     memset(D, 0, sizeof(*D));
     D->Kind = ProcFsNodeDir;
     D->Name = (char*)KMalloc((uint32_t)(strlen(Num) + 1));
-    if (!D->Name)
+    if (Probe_IF_Error(D->Name) || !D->Name)
     {
         KFree(D, Error);
         ReleaseSpinLock(&ProcPriv->Lock, Error);
@@ -110,7 +110,7 @@ ProcFsNotifyProcAdded(PosixProc* __Proc__)
 int
 ProcFsNotifyProcRemoved(PosixProc* __Proc__)
 {
-    if (!__Proc__ || __Proc__->Pid <= 0 || __Proc__->Pid >= ProcMaxPIDS)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || __Proc__->Pid <= 0 || __Proc__->Pid >= ProcMaxPIDS)
     {
         return -BadEntry;
     }
@@ -139,7 +139,7 @@ ProcFsNotifyProcRemoved(PosixProc* __Proc__)
 int
 ProcOpen(Vnode* __Node__, File* __File__)
 {
-    if (!__Node__ || !__File__)
+    if (Probe_IF_Error(__Node__) || !__Node__ || Probe_IF_Error(__File__) || !__File__)
     {
         return -BadArgs;
     }
@@ -156,18 +156,19 @@ ProcClose(File* __File__)
 long
 ProcRead(File* __File__, void* __Buf__, long __Len__)
 {
-    if (!__File__ || !__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__File__) || !__File__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }
     Vnode* Node = __File__->Node;
-    if (!Node)
+    if (Probe_IF_Error(Node) || !Node)
     {
         return -Dangling;
     }
 
     ProcFsNode* Pn = (ProcFsNode*)Node->Priv;
-    if (!Pn)
+    if (Probe_IF_Error(Pn) || !Pn)
     {
         return -Dangling;
     }
@@ -213,7 +214,7 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
         if (strcmp(Nm, "self") == 0)
         {
             PosixProc* cur = __CurrentProc__();
-            if (!cur)
+            if (Probe_IF_Error(cur) || !cur)
             {
                 return Nothing;
             }
@@ -224,7 +225,7 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
         if (strcmp(Nm, "stat") == 0)
         {
             PosixProc* Pr = (PosixProc*)Pn->Priv;
-            if (!Pr)
+            if (Probe_IF_Error(Pr) || !Pr)
             {
                 return -BadEntity;
             }
@@ -234,7 +235,7 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
         if (strcmp(Nm, "status") == 0)
         {
             PosixProc* Pr = (PosixProc*)Pn->Priv;
-            if (!Pr)
+            if (Probe_IF_Error(Pr) || !Pr)
             {
                 return -BadEntity;
             }
@@ -244,7 +245,7 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
         if (strcmp(Nm, "fds") == 0)
         {
             PosixProc* Pr = (PosixProc*)Pn->Priv;
-            if (!Pr)
+            if (Probe_IF_Error(Pr) || !Pr)
             {
                 return -BadEntity;
             }
@@ -254,7 +255,7 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
         if (strcmp(Nm, "cwd") == 0)
         {
             PosixProc* Pr = (PosixProc*)Pn->Priv;
-            if (!Pr)
+            if (Probe_IF_Error(Pr) || !Pr)
             {
                 return -BadEntity;
             }
@@ -265,7 +266,7 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
         if (strcmp(Nm, "root") == 0)
         {
             PosixProc* Pr = (PosixProc*)Pn->Priv;
-            if (!Pr)
+            if (Probe_IF_Error(Pr) || !Pr)
             {
                 return -BadEntity;
             }
@@ -276,7 +277,7 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
         if (strcmp(Nm, "cmdline") == 0)
         {
             PosixProc* Pr = (PosixProc*)Pn->Priv;
-            if (!Pr || Pr->CmdlineLen <= 0)
+            if (Probe_IF_Error(Pr) || !Pr || Pr->CmdlineLen <= 0)
             {
                 ((char*)__Buf__)[0] = '\0';
                 return Nothing;
@@ -288,7 +289,7 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
         if (strcmp(Nm, "environ") == 0)
         {
             PosixProc* Pr = (PosixProc*)Pn->Priv;
-            if (!Pr || Pr->EnvironLen <= 0)
+            if (Probe_IF_Error(Pr) || !Pr || Pr->EnvironLen <= 0)
             {
                 ((char*)__Buf__)[0] = '\0';
                 return Nothing;
@@ -307,17 +308,18 @@ ProcRead(File* __File__, void* __Buf__, long __Len__)
 long
 ProcWrite(File* __File__, const void* __Buf__, long __Len__)
 {
-    if (!__File__ || !__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__File__) || !__File__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }
     Vnode* Node = __File__->Node;
-    if (!Node)
+    if (Probe_IF_Error(Node) || !Node)
     {
         return -Dangling;
     }
     ProcFsNode* Pn = (ProcFsNode*)Node->Priv;
-    if (!Pn || Pn->Kind != ProcFsNodeFile)
+    if (Probe_IF_Error(Pn) || !Pn || Pn->Kind != ProcFsNodeFile)
     {
         return -BadEntity;
     }
@@ -328,7 +330,7 @@ ProcWrite(File* __File__, const void* __Buf__, long __Len__)
     if (strcmp(Nm, "state") == 0)
     {
         PosixProc* Pr = (PosixProc*)Pn->Priv;
-        if (!Pr)
+        if (Probe_IF_Error(Pr) || !Pr)
         {
             return -BadEntity;
         }
@@ -337,7 +339,7 @@ ProcWrite(File* __File__, const void* __Buf__, long __Len__)
     if (strcmp(Nm, "exec") == 0)
     {
         PosixProc* Pr = (PosixProc*)Pn->Priv;
-        if (!Pr)
+        if (Probe_IF_Error(Pr) || !Pr)
         {
             return -BadEntity;
         }
@@ -346,7 +348,7 @@ ProcWrite(File* __File__, const void* __Buf__, long __Len__)
     if (strcmp(Nm, "signal") == 0)
     {
         PosixProc* Pr = (PosixProc*)Pn->Priv;
-        if (!Pr)
+        if (Probe_IF_Error(Pr) || !Pr)
         {
             return -BadEntity;
         }
@@ -359,7 +361,7 @@ ProcWrite(File* __File__, const void* __Buf__, long __Len__)
 long
 ProcLseek(File* __File__, long __Off__, int __Wh__)
 {
-    if (!__File__)
+    if (Probe_IF_Error(__File__) || !__File__)
     {
         return -BadArgs;
     }
@@ -376,12 +378,12 @@ ProcIoctl(File* __File__, unsigned long __Cmd__, void* __Arg__)
 int
 ProcStat(Vnode* __Node__, VfsStat* __Out__)
 {
-    if (!__Node__ || !__Out__)
+    if (Probe_IF_Error(__Node__) || !__Node__ || Probe_IF_Error(__Out__) || !__Out__)
     {
         return -BadArgs;
     }
     ProcFsNode* Pn = (ProcFsNode*)__Node__->Priv;
-    if (!Pn)
+    if (Probe_IF_Error(Pn) || !Pn)
     {
         return -Dangling;
     }
@@ -446,7 +448,7 @@ __ResetCursor__(ProcDirCursorEntry* __C__)
 long
 ProcReaddir(Vnode* __Node__, void* __Buf__, long __Len__)
 {
-    if (!__Node__ || !__Buf__)
+    if (Probe_IF_Error(__Node__) || !__Node__ || Probe_IF_Error(__Buf__) || !__Buf__)
     {
         return -BadArgs;
     }
@@ -455,13 +457,13 @@ ProcReaddir(Vnode* __Node__, void* __Buf__, long __Len__)
     SysErr* Error = &err;
 
     ProcFsNode* Pn = (ProcFsNode*)__Node__->Priv;
-    if (!Pn || Pn->Kind != ProcFsNodeDir)
+    if (Probe_IF_Error(Pn) || !Pn || Pn->Kind != ProcFsNodeDir)
     {
         return BadEntity;
     }
 
     ProcDirCursorEntry* Cur = __GetCursor__(__Node__);
-    if (!Cur)
+    if (Probe_IF_Error(Cur) || !Cur)
     {
         return -NoSuch;
     }
@@ -517,7 +519,7 @@ ProcReaddir(Vnode* __Node__, void* __Buf__, long __Len__)
             ProcFsNode*   D = E->DirNode;
             ReleaseSpinLock(&ProcPriv->Lock, Error);
 
-            if (!D || !D->Priv)
+            if (Probe_IF_Error(D) || !D || Probe_IF_Error(D->Priv) || !D->Priv)
             {
                 continue;
             }
@@ -558,7 +560,7 @@ ProcReaddir(Vnode* __Node__, void* __Buf__, long __Len__)
     else
     {
         PosixProc* Pr = (PosixProc*)Pn->Priv;
-        if (!Pr)
+        if (Probe_IF_Error(Pr) || !Pr)
         {
             __ResetCursor__(Cur);
             return Nothing;
@@ -655,12 +657,12 @@ ProcReaddir(Vnode* __Node__, void* __Buf__, long __Len__)
 Vnode*
 ProcLookup(Vnode* __Dir__, const char* __Name__)
 {
-    if (!__Dir__ || !__Name__)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || Probe_IF_Error(__Name__) || !__Name__)
     {
         return Error_TO_Pointer(-BadArgs);
     }
     ProcFsNode* Pn = (ProcFsNode*)__Dir__->Priv;
-    if (!Pn || Pn->Kind != ProcFsNodeDir)
+    if (Probe_IF_Error(Pn) || !Pn || Pn->Kind != ProcFsNodeDir)
     {
         return Error_TO_Pointer(-BadEntity);
     }
@@ -673,7 +675,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
         if (strcmp(__Name__, "uptime") == 0)
         {
             ProcFsNode* F = (ProcFsNode*)KMalloc(sizeof(ProcFsNode));
-            if (!F)
+            if (Probe_IF_Error(F) || !F)
             {
                 return Error_TO_Pointer(-BadAlloc);
             }
@@ -684,7 +686,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
             F->Perm.Mode = VModeRUSR | VModeRGRP | VModeROTH;
 
             Vnode* N = (Vnode*)KMalloc(sizeof(Vnode));
-            if (!N)
+            if (Probe_IF_Error(N) || !N)
             {
                 return Error_TO_Pointer(-BadAlloc);
             }
@@ -700,7 +702,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
         if (strcmp(__Name__, "self") == 0)
         {
             ProcFsNode* F = (ProcFsNode*)KMalloc(sizeof(ProcFsNode));
-            if (!F)
+            if (Probe_IF_Error(F) || !F)
             {
                 return Error_TO_Pointer(-BadAlloc);
             }
@@ -711,7 +713,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
             F->Perm.Mode = VModeRUSR | VModeRGRP | VModeROTH;
 
             Vnode* N = (Vnode*)KMalloc(sizeof(Vnode));
-            if (!N)
+            if (Probe_IF_Error(N) || !N)
             {
                 return Error_TO_Pointer(-BadAlloc);
             }
@@ -735,7 +737,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
             if (D && D->Priv)
             {
                 Vnode* N = (Vnode*)KMalloc(sizeof(Vnode));
-                if (!N)
+                if (Probe_IF_Error(N) || !N)
                 {
                     return Error_TO_Pointer(-BadAlloc);
                 }
@@ -752,7 +754,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
         for (long I = 0; I < PosixProcs.Count; I++)
         {
             PosixProc* Pr = PosixProcs.Items[I];
-            if (!Pr)
+            if (Probe_IF_Error(Pr) || !Pr)
             {
                 continue;
             }
@@ -761,14 +763,14 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
             if (strcmp(__Name__, Num) == 0)
             {
                 ProcFsNode* D = (ProcFsNode*)KMalloc(sizeof(ProcFsNode));
-                if (!D)
+                if (Probe_IF_Error(D) || !D)
                 {
                     return Error_TO_Pointer(-BadAlloc);
                 }
                 memset(D, 0, sizeof(*D));
                 D->Kind = ProcFsNodeDir;
                 D->Name = (char*)KMalloc(32);
-                if (!D->Name)
+                if (Probe_IF_Error(D->Name) || !D->Name)
                 {
                     KFree(D, Error);
                     return Error_TO_Pointer(-BadAlloc);
@@ -780,7 +782,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
                 D->Priv = (void*)Pr;
 
                 Vnode* N = (Vnode*)KMalloc(sizeof(Vnode));
-                if (!N)
+                if (Probe_IF_Error(N) || !N)
                 {
                     KFree(D->Name, Error);
                     KFree(D, Error);
@@ -800,7 +802,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
     else
     {
         PosixProc* Pr = (PosixProc*)Pn->Priv;
-        if (!Pr)
+        if (Probe_IF_Error(Pr) || !Pr)
         {
             return Error_TO_Pointer(-Dangling);
         }
@@ -820,7 +822,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
             if (strcmp(__Name__, Fn[KIdx]) == 0)
             {
                 ProcFsNode* F = (ProcFsNode*)KMalloc(sizeof(ProcFsNode));
-                if (!F)
+                if (Probe_IF_Error(F) || !F)
                 {
                     return Error_TO_Pointer(-NoSuch);
                 }
@@ -840,7 +842,7 @@ ProcLookup(Vnode* __Dir__, const char* __Name__)
                 F->Priv = (void*)Pr;
 
                 Vnode* N = (Vnode*)KMalloc(sizeof(Vnode));
-                if (!N)
+                if (Probe_IF_Error(N) || !N)
                 {
                     if (F->Name)
                     {
@@ -959,7 +961,7 @@ ProcSuperSync(Superblock* __Sb__)
 int
 ProcSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__)
 {
-    if (!__Sb__ || !__Out__)
+    if (Probe_IF_Error(__Sb__) || !__Sb__ || Probe_IF_Error(__Out__) || !__Out__)
     {
         return -BadArgs;
     }
@@ -999,7 +1001,7 @@ int
 ProcFsInit(void)
 {
     ProcPriv = (ProcFsPriv*)KMalloc(sizeof(ProcFsPriv));
-    if (!ProcPriv)
+    if (Probe_IF_Error(ProcPriv) || !ProcPriv)
     {
         return -BadAlloc;
     }
@@ -1012,7 +1014,7 @@ ProcFsInit(void)
     memset(__ProcPidCache__, 0, sizeof(__ProcPidCache__));
 
     Superblock* Sb = ProcFsMountImpl(NULL, NULL);
-    if (!Sb)
+    if (Probe_IF_Error(Sb) || !Sb)
     {
         return -Dangling;
     }
@@ -1027,7 +1029,7 @@ Superblock*
 ProcFsMountImpl(const char* __Dev__, const char* __Opts__)
 {
     ProcSuper = (Superblock*)KMalloc(sizeof(Superblock));
-    if (!ProcSuper)
+    if (Probe_IF_Error(ProcSuper) || !ProcSuper)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
@@ -1038,7 +1040,7 @@ ProcFsMountImpl(const char* __Dev__, const char* __Opts__)
     ProcSuper->Ops   = &__ProcFsSuperOps__;
 
     ProcFsNode* Root = (ProcFsNode*)KMalloc(sizeof(ProcFsNode));
-    if (!Root)
+    if (Probe_IF_Error(Root) || !Root)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
@@ -1049,7 +1051,7 @@ ProcFsMountImpl(const char* __Dev__, const char* __Opts__)
     Root->Perm.Mode = VModeRUSR | VModeRGRP | VModeROTH | VModeXUSR | VModeXGRP | VModeXOTH;
 
     Vnode* RootV = (Vnode*)KMalloc(sizeof(Vnode));
-    if (!RootV)
+    if (Probe_IF_Error(RootV) || !RootV)
     {
         return Error_TO_Pointer(-BadAlloc);
     }

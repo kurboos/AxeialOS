@@ -38,7 +38,7 @@ CreateVirtualSpace(void)
     }
 
     uint64_t SpacePhys = AllocPage();
-    if (!SpacePhys)
+    if (Probe_IF_Error(SpacePhys) || !SpacePhys)
     {
         return Error_TO_Pointer(-NotCanonical);
     }
@@ -47,14 +47,14 @@ CreateVirtualSpace(void)
     SysErr* Error = &err;
 
     VirtualMemorySpace* Space = (VirtualMemorySpace*)PhysToVirt(SpacePhys);
-    if (!Space)
+    if (Probe_IF_Error(Space) || !Space)
     {
         FreePage(SpacePhys, Error);
         return Error_TO_Pointer(-NotCanonical);
     }
 
     uint64_t Pml4Phys = AllocPage();
-    if (!Pml4Phys)
+    if (Probe_IF_Error(Pml4Phys) || !Pml4Phys)
     {
         FreePage(SpacePhys, Error);
         return Error_TO_Pointer(-NotCanonical);
@@ -64,7 +64,7 @@ CreateVirtualSpace(void)
     Space->Pml4         = (uint64_t*)PhysToVirt(Pml4Phys);
     Space->RefCount     = 1;
 
-    if (!Space->Pml4)
+    if (Probe_IF_Error(Space->Pml4) || !Space->Pml4)
     {
         FreePage(SpacePhys, Error);
         FreePage(Pml4Phys, Error);
@@ -88,7 +88,7 @@ CreateVirtualSpace(void)
 void
 DestroyVirtualSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
 {
-    if (!__Space__ || __Space__ == Vmm.KernelSpace)
+    if (Probe_IF_Error(__Space__) || !__Space__ || __Space__ == Vmm.KernelSpace)
     {
         SlotError(__Err__, -NotCanonical);
         return;
@@ -117,7 +117,7 @@ DestroyVirtualSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
 
         uint64_t  PdptPhys = __Space__->Pml4[Pml4Index] & 0x000FFFFFFFFFF000ULL;
         uint64_t* Pdpt     = (uint64_t*)PhysToVirt(PdptPhys);
-        if (!Pdpt)
+        if (Probe_IF_Error(Pdpt) || !Pdpt)
         {
             continue;
         }
@@ -131,7 +131,7 @@ DestroyVirtualSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
 
             uint64_t  PdPhys = Pdpt[PdptIndex] & 0x000FFFFFFFFFF000ULL;
             uint64_t* Pd     = (uint64_t*)PhysToVirt(PdPhys);
-            if (!Pd)
+            if (Probe_IF_Error(Pd) || !Pd)
             {
                 continue;
             }
@@ -166,7 +166,8 @@ MapPage(VirtualMemorySpace* __Space__,
         uint64_t            __PhysAddr__,
         uint64_t            __Flags__)
 {
-    if (!__Space__ || (__VirtAddr__ % PageSize) != 0 || (__PhysAddr__ % PageSize) != 0)
+    if (Probe_IF_Error(__Space__) || !__Space__ || (__VirtAddr__ % PageSize) != 0 ||
+        (__PhysAddr__ % PageSize) != 0)
     {
         return -BadArgs;
     }
@@ -177,7 +178,7 @@ MapPage(VirtualMemorySpace* __Space__,
     }
 
     uint64_t* Pt = GetPageTable(__Space__->Pml4, __VirtAddr__, 1, 1);
-    if (!Pt)
+    if (Probe_IF_Error(Pt) || !Pt)
     {
         return -NotCanonical;
     }
@@ -203,13 +204,13 @@ MapPage(VirtualMemorySpace* __Space__,
 int
 UnmapPage(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 {
-    if (!__Space__ || (__VirtAddr__ % PageSize) != 0)
+    if (Probe_IF_Error(__Space__) || !__Space__ || (__VirtAddr__ % PageSize) != 0)
     {
         return -BadArgs;
     }
 
     uint64_t* Pt = GetPageTable(__Space__->Pml4, __VirtAddr__, 1, 0);
-    if (!Pt)
+    if (Probe_IF_Error(Pt) || !Pt)
     {
         return -NotCanonical;
     }
@@ -235,13 +236,13 @@ UnmapPage(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 uint64_t
 GetPhysicalAddress(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 {
-    if (!__Space__)
+    if (Probe_IF_Error(__Space__) || !__Space__)
     {
         return -NotCanonical;
     }
 
     uint64_t* Pt = GetPageTable(__Space__->Pml4, __VirtAddr__, 1, 0);
-    if (!Pt)
+    if (Probe_IF_Error(Pt) || !Pt)
     {
         return -NotCanonical;
     }
@@ -264,7 +265,7 @@ GetPhysicalAddress(VirtualMemorySpace* __Space__, uint64_t __VirtAddr__)
 void
 SwitchVirtualSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
 {
-    if (!__Space__)
+    if (Probe_IF_Error(__Space__) || !__Space__)
     {
         SlotError(__Err__, -NotCanonical);
         return;

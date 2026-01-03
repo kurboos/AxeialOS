@@ -174,7 +174,7 @@ PciFindByClass(uint8_t __ClassCode__, uint8_t __SubClass__, uint32_t __Index__)
 int
 PciEnableBusMastering(PciDevice* __Device__)
 {
-    if (!__Device__)
+    if (Probe_IF_Error(__Device__) || !__Device__)
     {
         return -BadArgs;
     }
@@ -195,7 +195,7 @@ PciEnableBusMastering(PciDevice* __Device__)
 int
 PciDisableBusMastering(PciDevice* __Device__)
 {
-    if (!__Device__)
+    if (Probe_IF_Error(__Device__) || !__Device__)
     {
         return -BadArgs;
     }
@@ -211,7 +211,7 @@ PciDisableBusMastering(PciDevice* __Device__)
 int
 PciEnableMemorySpace(PciDevice* __Device__)
 {
-    if (!__Device__)
+    if (Probe_IF_Error(__Device__) || !__Device__)
     {
         return -BadArgs;
     }
@@ -227,7 +227,7 @@ PciEnableMemorySpace(PciDevice* __Device__)
 int
 PciEnableIoSpace(PciDevice* __Device__)
 {
-    if (!__Device__)
+    if (Probe_IF_Error(__Device__) || !__Device__)
     {
         return -BadArgs;
     }
@@ -243,7 +243,7 @@ PciEnableIoSpace(PciDevice* __Device__)
 uint64_t
 PciGetBarAddress(PciDevice* __Device__, uint8_t __BarIndex__)
 {
-    if (!__Device__ || __BarIndex__ >= 6)
+    if (Probe_IF_Error(__Device__) || !__Device__ || __BarIndex__ >= 6)
     {
         return Nothing;
     }
@@ -254,7 +254,7 @@ PciGetBarAddress(PciDevice* __Device__, uint8_t __BarIndex__)
 uint64_t
 PciGetBarSize(PciDevice* __Device__, uint8_t __BarIndex__)
 {
-    if (!__Device__ || __BarIndex__ >= 6)
+    if (Probe_IF_Error(__Device__) || !__Device__ || __BarIndex__ >= 6)
     {
         return Nothing;
     }
@@ -265,7 +265,7 @@ PciGetBarSize(PciDevice* __Device__, uint8_t __BarIndex__)
 uint32_t
 PciGetBarType(PciDevice* __Device__, uint8_t __BarIndex__)
 {
-    if (!__Device__ || __BarIndex__ >= 6)
+    if (Probe_IF_Error(__Device__) || !__Device__ || __BarIndex__ >= 6)
     {
         return Nothing;
     }

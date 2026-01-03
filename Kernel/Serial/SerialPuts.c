@@ -1,4 +1,4 @@
-#include <Serial.h> /* Serial port constants and register definitions */
+#include <Serial.h>
 
 void
 SerialPutChar(char __Char__)

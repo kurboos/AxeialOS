@@ -63,20 +63,20 @@ RamFsMountImpl(const char* __Dev__ _unused, const char* __Opts__ _unused)
     }
 
     Superblock* Sb = (Superblock*)KMalloc(sizeof(Superblock));
-    if (!Sb)
+    if (Probe_IF_Error(Sb) || !Sb)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
 
     Vnode* Root = (Vnode*)KMalloc(sizeof(Vnode));
-    if (!Root)
+    if (Probe_IF_Error(Root) || !Root)
     {
         KFree(Sb, Error);
         return Error_TO_Pointer(-BadAlloc);
     }
 
     RamVfsPrivNode* Priv = (RamVfsPrivNode*)KMalloc(sizeof(RamVfsPrivNode));
-    if (!Priv)
+    if (Probe_IF_Error(Priv) || !Priv)
     {
         KFree(Root, Error);
         KFree(Sb, Error);
@@ -104,13 +104,13 @@ RamFsMountImpl(const char* __Dev__ _unused, const char* __Opts__ _unused)
 int
 RamVfsOpen(Vnode* __Node__, File* __File__)
 {
-    if (!__Node__ || !__File__)
+    if (Probe_IF_Error(__Node__) || !__Node__ || Probe_IF_Error(__File__) || !__File__)
     {
         return -BadArgs;
     }
 
     RamVfsPrivNode* PN = (RamVfsPrivNode*)__Node__->Priv;
-    if (!PN || !PN->Node)
+    if (Probe_IF_Error(PN) || !PN || Probe_IF_Error(PN->Node) || !PN->Node)
     {
         return -NotCanonical;
     }
@@ -127,7 +127,7 @@ RamVfsOpen(Vnode* __Node__, File* __File__)
     if (PN->Node->Type == RamFSNode_File)
     {
         RamVfsPrivFile* PF = (RamVfsPrivFile*)KMalloc(sizeof(RamVfsPrivFile));
-        if (!PF)
+        if (Probe_IF_Error(PF) || !PF)
         {
             return -BadAlloc;
         }
@@ -148,7 +148,7 @@ RamVfsOpen(Vnode* __Node__, File* __File__)
 int
 RamVfsClose(File* __File__)
 {
-    if (!__File__)
+    if (Probe_IF_Error(__File__) || !__File__)
     {
         return -BadArgs;
     }
@@ -167,13 +167,14 @@ RamVfsClose(File* __File__)
 long
 RamVfsRead(File* __File__, void* __Buf__, long __Len__)
 {
-    if (!__File__ || !__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__File__) || !__File__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }
 
     RamVfsPrivFile* PF = (RamVfsPrivFile*)__File__->Priv;
-    if (!PF || !PF->Node)
+    if (Probe_IF_Error(PF) || !PF || Probe_IF_Error(PF->Node) || !PF->Node)
     {
         return -Dangling;
     }
@@ -198,7 +199,7 @@ RamVfsWrite(File* __File__ _unused, const void* __Buf__ _unused, long __Len__ _u
 long
 RamVfsLseek(File* __File__, long __Off__, int __Whence__)
 {
-    if (!__File__)
+    if (Probe_IF_Error(__File__) || !__File__)
     {
         return -BadEntry;
     }
@@ -256,13 +257,13 @@ RamVfsIoctl(File* __File__ _unused, unsigned long __Cmd__ _unused, void* __Arg__
 int
 RamVfsStat(Vnode* __Node__, VfsStat* __Out__)
 {
-    if (!__Node__ || !__Out__)
+    if (Probe_IF_Error(__Node__) || !__Node__ || Probe_IF_Error(__Out__) || !__Out__)
     {
         return -BadArgs;
     }
 
     RamVfsPrivNode* PN = (RamVfsPrivNode*)__Node__->Priv;
-    if (!PN || !PN->Node)
+    if (Probe_IF_Error(PN) || !PN || Probe_IF_Error(PN->Node) || !PN->Node)
     {
         return -Dangling;
     }
@@ -291,13 +292,14 @@ RamVfsStat(Vnode* __Node__, VfsStat* __Out__)
 long
 RamVfsReaddir(Vnode* __Dir__, void* __Buf__, long __BufLen__)
 {
-    if (!__Dir__ || !__Buf__ || __BufLen__ <= 0)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __BufLen__ <= 0)
     {
         return -BadArgs;
     }
 
     RamVfsPrivNode* PN = (RamVfsPrivNode*)__Dir__->Priv;
-    if (!PN || !PN->Node)
+    if (Probe_IF_Error(PN) || !PN || Probe_IF_Error(PN->Node) || !PN->Node)
     {
         return -Dangling;
     }
@@ -337,13 +339,14 @@ RamVfsReaddir(Vnode* __Dir__, void* __Buf__, long __BufLen__)
 Vnode*
 RamVfsLookup(Vnode* __Dir__, const char* __Name__)
 {
-    if (!__Dir__ || !__Name__)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || Probe_IF_Error(__Name__) || !__Name__)
     {
         return Error_TO_Pointer(-BadArgs);
     }
 
     RamVfsPrivNode* PN = (RamVfsPrivNode*)__Dir__->Priv;
-    if (!PN || !PN->Node || PN->Node->Type != RamFSNode_Directory)
+    if (Probe_IF_Error(PN) || !PN || Probe_IF_Error(PN->Node) || !PN->Node ||
+        PN->Node->Type != RamFSNode_Directory)
     {
         return Error_TO_Pointer(-BadEntry);
     }
@@ -352,7 +355,7 @@ RamVfsLookup(Vnode* __Dir__, const char* __Name__)
     for (uint32_t I = 0; I < PN->Node->ChildCount; I++)
     {
         RamFSNode* C = PN->Node->Children[I];
-        if (!C || !C->Name)
+        if (Probe_IF_Error(C) || !C || Probe_IF_Error(C->Name) || !C->Name)
         {
             continue;
         }
@@ -362,19 +365,19 @@ RamVfsLookup(Vnode* __Dir__, const char* __Name__)
             break;
         }
     }
-    if (!Child)
+    if (Probe_IF_Error(Child) || !Child)
     {
         return Error_TO_Pointer(-BadEntry);
     }
 
     Vnode* V = (Vnode*)KMalloc(sizeof(Vnode));
-    if (!V)
+    if (Probe_IF_Error(V) || !V)
     {
         return Error_TO_Pointer(-BadAlloc);
     }
 
     RamVfsPrivNode* Priv = (RamVfsPrivNode*)KMalloc(sizeof(RamVfsPrivNode));
-    if (!Priv)
+    if (Probe_IF_Error(Priv) || !Priv)
     {
         SysErr  err;
         SysErr* Error = &err;
@@ -395,12 +398,12 @@ RamVfsLookup(Vnode* __Dir__, const char* __Name__)
 int
 RamVfsCreate(Vnode* __Dir__, const char* __Name__, long __Flags__ _unused, VfsPerm __Perm__ _unused)
 {
-    if (!__Dir__ || !__Name__)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || Probe_IF_Error(__Name__) || !__Name__)
     {
         return -BadArgs;
     }
     RamVfsPrivNode* PN = (RamVfsPrivNode*)__Dir__->Priv;
-    if (!PN || !PN->Node)
+    if (Probe_IF_Error(PN) || !PN || Probe_IF_Error(PN->Node) || !PN->Node)
     {
         return -Dangling;
     }
@@ -410,7 +413,7 @@ RamVfsCreate(Vnode* __Dir__, const char* __Name__, long __Flags__ _unused, VfsPe
     }
 
     char* Path = RamFSJoinPath(PN->Node->Name ? PN->Node->Name : "/", __Name__);
-    if (!Path)
+    if (Probe_IF_Error(Path) || !Path)
     {
         return -NotCanonical;
     }
@@ -431,13 +434,13 @@ RamVfsUnlink(Vnode* __Dir__ _unused, const char* __Name__ _unused)
 int
 RamVfsMkdir(Vnode* __Dir__, const char* __Name__, VfsPerm __Perm__ _unused)
 {
-    if (!__Dir__ || !__Name__)
+    if (Probe_IF_Error(__Dir__) || !__Dir__ || Probe_IF_Error(__Name__) || !__Name__)
     {
         return -BadArgs;
     }
 
     RamVfsPrivNode* PN = (RamVfsPrivNode*)__Dir__->Priv;
-    if (!PN || !PN->Node)
+    if (Probe_IF_Error(PN) || !PN || Probe_IF_Error(PN->Node) || !PN->Node)
     {
         return -Dangling;
     }
@@ -448,7 +451,7 @@ RamVfsMkdir(Vnode* __Dir__, const char* __Name__, VfsPerm __Perm__ _unused)
     }
 
     char* Path = RamFSJoinPath(PN->Node->Name ? PN->Node->Name : "/", __Name__);
-    if (!Path)
+    if (Probe_IF_Error(Path) || !Path)
     {
         return -NotCanonical;
     }
@@ -543,7 +546,7 @@ RamVfsSuperSync(Superblock* __Sb__ _unused)
 int
 RamVfsSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__)
 {
-    if (!__Sb__ || !__Out__)
+    if (Probe_IF_Error(__Sb__) || !__Sb__ || Probe_IF_Error(__Out__) || !__Out__)
     {
         return -BadArgs;
     }
@@ -564,7 +567,7 @@ RamVfsSuperStatFs(Superblock* __Sb__, VfsStatFs* __Out__)
 void
 RamVfsSuperRelease(Superblock* __Sb__, SysErr* __Err__)
 {
-    if (!__Sb__)
+    if (Probe_IF_Error(__Sb__) || !__Sb__)
     {
         SlotError(__Err__, -BadArgs);
         return;
@@ -593,7 +596,7 @@ RamVfsSuperUmount(Superblock* __Sb__ _unused)
 int
 BootMountRamFs(const void* __Initrd__, size_t __Len__)
 {
-    if (!__Initrd__ || __Len__ == 0)
+    if (Probe_IF_Error(__Initrd__) || !__Initrd__ || __Len__ == 0)
     {
         return -BadArgs;
     }

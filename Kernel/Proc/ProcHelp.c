@@ -9,7 +9,8 @@
 static inline long
 __AppendStr__(char* __Buf__, long __Cap__, long* __Off__, const char* __Str__)
 {
-    if (!__Buf__ || !__Off__ || !__Str__ || __Cap__ <= 0)
+    if (Probe_IF_Error(__Buf__) || !__Buf__ || Probe_IF_Error(__Off__) || !__Off__ ||
+        Probe_IF_Error(__Str__) || !__Str__ || __Cap__ <= 0)
     {
         return -BadArgs;
     }
@@ -41,7 +42,7 @@ __AppendStr__(char* __Buf__, long __Cap__, long* __Off__, const char* __Str__)
 static inline long
 __AppendChar__(char* __Buf__, long __Cap__, long* __Off__, char __Ch__)
 {
-    if (!__Buf__ || !__Off__ || __Cap__ <= 0)
+    if (Probe_IF_Error(__Buf__) || !__Buf__ || Probe_IF_Error(__Off__) || !__Off__ || __Cap__ <= 0)
     {
         return -BadArgs;
     }
@@ -65,7 +66,7 @@ __AppendChar__(char* __Buf__, long __Cap__, long* __Off__, char __Ch__)
 static inline long
 __AppendU64Dec__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 {
-    if (!__Buf__ || !__Off__ || __Cap__ <= 0)
+    if (Probe_IF_Error(__Buf__) || !__Buf__ || Probe_IF_Error(__Off__) || !__Off__ || __Cap__ <= 0)
     {
         return -BadArgs;
     }
@@ -79,7 +80,7 @@ __AppendU64Dec__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 static inline long
 __AppendU64Hex__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 {
-    if (!__Buf__ || !__Off__ || __Cap__ <= 0)
+    if (Probe_IF_Error(__Buf__) || !__Buf__ || Probe_IF_Error(__Off__) || !__Off__ || __Cap__ <= 0)
     {
         return -BadArgs;
     }
@@ -92,7 +93,7 @@ __AppendU64Hex__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 static inline long
 __AppendU64Oct__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 {
-    if (!__Buf__ || !__Off__ || __Cap__ <= 0)
+    if (Probe_IF_Error(__Buf__) || !__Buf__ || Probe_IF_Error(__Off__) || !__Off__ || __Cap__ <= 0)
     {
         return -BadArgs;
     }
@@ -105,7 +106,8 @@ __AppendU64Oct__(char* __Buf__, long __Cap__, long* __Off__, uint64_t __V__)
 long
 ProcFsMakeStatus(PosixProc* __Proc__, char* __Buff__, long __Caps__)
 {
-    if (!__Proc__ || !__Buff__ || __Caps__ <= 0)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Buff__) || !__Buff__ ||
+        __Caps__ <= 0)
     {
         return -BadArgs;
     }
@@ -246,7 +248,8 @@ __AppendField__(char* __Buff__, long __Caps__, long* __Off__, const char* __Fiel
 long
 ProcFsMakeStat(PosixProc* __Proc__, char* __Buf__, long __Cap__)
 {
-    if (!__Proc__ || !__Buf__ || __Cap__ <= 0)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Cap__ <= 0)
     {
         return -BadArgs;
     }
@@ -314,11 +317,12 @@ ProcFsMakeStat(PosixProc* __Proc__, char* __Buf__, long __Cap__)
 long
 ProcFsListFds(PosixProc* __Proc__, char* __Buf__, long __Cap__)
 {
-    if (!__Proc__ || !__Buf__ || __Cap__ <= 0)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Cap__ <= 0)
     {
         return -BadArgs;
     }
-    if (!__Proc__->Fds)
+    if (Probe_IF_Error(__Proc__->Fds) || !__Proc__->Fds)
     {
         __Buf__[0] = '\0';
         return Nothing;
@@ -360,7 +364,8 @@ ProcFsListFds(PosixProc* __Proc__, char* __Buf__, long __Cap__)
 long
 ProcFsWriteState(PosixProc* __Proc__, const char* __Buf__, long __Len__)
 {
-    if (!__Proc__ || !__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }
@@ -387,7 +392,8 @@ ProcFsWriteState(PosixProc* __Proc__, const char* __Buf__, long __Len__)
 long
 ProcFsWriteExec(PosixProc* __Proc__, const char* __Buf__, long __Len__)
 {
-    if (!__Proc__ || !__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }
@@ -405,7 +411,8 @@ ProcFsWriteExec(PosixProc* __Proc__, const char* __Buf__, long __Len__)
 long
 ProcFsWriteSignal(PosixProc* __Proc__, const char* __Buf__, long __Len__)
 {
-    if (!__Proc__ || !__Buf__ || __Len__ <= 0)
+    if (Probe_IF_Error(__Proc__) || !__Proc__ || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Len__ <= 0)
     {
         return -BadArgs;
     }

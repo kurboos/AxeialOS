@@ -10,7 +10,7 @@
 int
 InstallModule(const char* __Path__)
 {
-    if (!__Path__)
+    if (Probe_IF_Error(__Path__) || !__Path__)
     {
         return -BadArgs;
     }
@@ -58,14 +58,14 @@ InstallModule(const char* __Path__)
 
     long        ShtBytes = ShNum * (long)sizeof(Elf64_Shdr);
     Elf64_Shdr* ShTbl    = (Elf64_Shdr*)KMalloc((size_t)ShtBytes);
-    if (!ShTbl)
+    if (Probe_IF_Error(ShTbl) || !ShTbl)
     {
         return -BadAlloc;
     }
 
     {
         File* F = VfsOpen(__Path__, VFlgRDONLY);
-        if (!F)
+        if (Probe_IF_Error(F) || !F)
         {
             KFree(ShTbl, Error);
             return -NotCanonical;
@@ -109,7 +109,7 @@ InstallModule(const char* __Path__)
 
     Elf64_Sym* SymBuf = (Elf64_Sym*)KMalloc((size_t)SymSh->sh_size);
     char*      StrBuf = (char*)KMalloc((size_t)StrSh->sh_size);
-    if (!SymBuf || !StrBuf)
+    if (Probe_IF_Error(SymBuf) || !SymBuf || Probe_IF_Error(StrBuf) || !StrBuf)
     {
         if (SymBuf)
         {
@@ -125,7 +125,7 @@ InstallModule(const char* __Path__)
 
     {
         File* F = VfsOpen(__Path__, VFlgRDONLY);
-        if (!F)
+        if (Probe_IF_Error(F) || !F)
         {
             KFree(SymBuf, Error);
             KFree(StrBuf, Error);
@@ -163,7 +163,7 @@ InstallModule(const char* __Path__)
 
     long           SymCount = (long)((long)SymSh->sh_size / (long)sizeof(Elf64_Sym));
     __ElfSymbol__* Syms = (__ElfSymbol__*)KMalloc((size_t)(SymCount * (long)sizeof(__ElfSymbol__)));
-    if (!Syms)
+    if (Probe_IF_Error(Syms) || !Syms)
     {
         KFree(SymBuf, Error);
         KFree(StrBuf, Error);
@@ -184,7 +184,7 @@ InstallModule(const char* __Path__)
     }
 
     void** SectionBases = (void**)KMalloc((size_t)(ShNum * (long)sizeof(void*)));
-    if (!SectionBases)
+    if (Probe_IF_Error(SectionBases) || !SectionBases)
     {
         KFree(Syms, Error);
         KFree(SymBuf, Error);
@@ -206,53 +206,135 @@ InstallModule(const char* __Path__)
             SectionBases[I] = (void*)ZeroStub;
             continue;
         }
-
-        int   IsText = (Flags & (uint64_t)0x4ULL) ? true : false;
-        void* Base   = ModMalloc((size_t)Size, IsText ? true : false);
-        if (Base)
         {
-            for (long J = 0; J < ShNum; J++)
+            int      IsText = (Flags & (uint64_t)0x4ULL) ? true : false;
+            size_t   Bytes  = (size_t)Size;
+            size_t   Pages  = (Bytes + (size_t)PageSize - 1) / (size_t)PageSize;
+            uint64_t Phys   = AllocPages(Pages);
+            if (!Phys)
             {
-                if (SectionBases[J] && SectionBases[J] != (void*)ZeroStub)
+                /* rollback any previously mapped sections */
+                for (long J = 0; J < ShNum; J++)
                 {
-                    long SzJ = (long)ShTbl[J].sh_size;
-                    if (SzJ > 0)
+                    if (SectionBases[J] && SectionBases[J] != (void*)ZeroStub)
                     {
-                        ModFree(SectionBases[J], (size_t)SzJ, Error);
+                        long SzJ = (long)ShTbl[J].sh_size;
+                        if (SzJ > 0)
+                        {
+                            size_t   PgJ = (size_t)((SzJ + PageSize - 1) / PageSize);
+                            uint64_t VaJ = (uint64_t)SectionBases[J];
+                            for (size_t off = 0; off < PgJ * PageSize; off += PageSize)
+                            {
+                                uint64_t PaJ = GetPhysicalAddress(Vmm.KernelSpace, VaJ + off);
+                                UnmapPage(Vmm.KernelSpace, VaJ + off);
+                                if (PaJ)
+                                {
+                                    FreePage(PaJ, Error);
+                                }
+                            }
+                        }
                     }
                 }
+                KFree(SectionBases, Error);
+                KFree(Syms, Error);
+                KFree(SymBuf, Error);
+                KFree(StrBuf, Error);
+                KFree(ShTbl, Error);
+                return -BadAlloc;
             }
-            KFree(SectionBases, Error);
-            KFree(Syms, Error);
-            KFree(SymBuf, Error);
-            KFree(StrBuf, Error);
-            KFree(ShTbl, Error);
-            return -BadAlloc;
-        }
 
-        SectionBases[I] = Base;
+            uint64_t VaBase =
+                IsText ? (ModTextBase + ModMem.TextCursor) : (ModDataBase + ModMem.DataCursor);
 
-        if (Type == (uint32_t)8U)
-        {
-            memset(Base, 0, (size_t)Size);
-        }
-        else
-        {
-            File* F = VfsOpen(__Path__, VFlgRDONLY);
-            if (!F)
+            uint64_t MapFlags = PTEPRESENT;
+            if (IsText)
             {
-                return -NotCanonical;
+                /* load-time writable (for reloc), executable */
+                MapFlags |= PTEWRITABLE;
             }
-            if (VfsLseek(F, (long)S->sh_offset, VSeekSET) < 0)
+            else
             {
+                /* data/bss: RW, NX */
+                MapFlags |= PTEWRITABLE | PTENOEXECUTE;
+            }
+
+            size_t Mapped = 0;
+            for (size_t off = 0; off < Pages * PageSize; off += PageSize)
+            {
+                int rc = MapPage(Vmm.KernelSpace, VaBase + off, Phys + off, MapFlags);
+                if (rc != SysOkay)
+                {
+                    /* rollback this section */
+                    for (size_t roff = 0; roff < off; roff += PageSize)
+                    {
+                        UnmapPage(Vmm.KernelSpace, VaBase + roff);
+                    }
+                    FreePages(Phys, Pages, Error);
+                    /* rollback previously mapped sections */
+                    for (long J = 0; J < I; J++)
+                    {
+                        if (SectionBases[J] && SectionBases[J] != (void*)ZeroStub)
+                        {
+                            long SzJ = (long)ShTbl[J].sh_size;
+                            if (SzJ > 0)
+                            {
+                                size_t   PgJ = (size_t)((SzJ + PageSize - 1) / PageSize);
+                                uint64_t VaJ = (uint64_t)SectionBases[J];
+                                for (size_t o2 = 0; o2 < PgJ * PageSize; o2 += PageSize)
+                                {
+                                    uint64_t PaJ = GetPhysicalAddress(Vmm.KernelSpace, VaJ + o2);
+                                    UnmapPage(Vmm.KernelSpace, VaJ + o2);
+                                    if (PaJ)
+                                    {
+                                        FreePage(PaJ, Error);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    KFree(SectionBases, Error);
+                    KFree(Syms, Error);
+                    KFree(SymBuf, Error);
+                    KFree(StrBuf, Error);
+                    KFree(ShTbl, Error);
+                    return -BadAlloc;
+                }
+                Mapped += PageSize;
+            }
+
+            if (IsText)
+            {
+                ModMem.TextCursor += (uint64_t)(Pages * PageSize);
+            }
+            else
+            {
+                ModMem.DataCursor += (uint64_t)(Pages * PageSize);
+            }
+
+            SectionBases[I] = (void*)VaBase;
+
+            if (Type == (uint32_t)8U)
+            {
+                memset((void*)VaBase, 0, (size_t)Size);
+            }
+            else
+            {
+                File* F = VfsOpen(__Path__, VFlgRDONLY);
+                if (Probe_IF_Error(F) || !F)
+                {
+                    return -NotCanonical;
+                }
+                if (VfsLseek(F, (long)S->sh_offset, VSeekSET) < 0)
+                {
+                    VfsClose(F);
+                    return -NoRead;
+                }
+                long Rd = VfsRead(F, (void*)VaBase, Size);
                 VfsClose(F);
-                return -NoRead;
-            }
-            long Rd = VfsRead(F, Base, Size);
-            VfsClose(F);
-            if (Rd < Size)
-            {
-                return -NoRead;
+                if (Rd < Size)
+                {
+                    return -NoRead;
+                }
             }
         }
     }
@@ -310,13 +392,13 @@ InstallModule(const char* __Path__)
         }
 
         void* RelBuf = KMalloc((size_t)RelSh->sh_size);
-        if (!RelBuf)
+        if (Probe_IF_Error(RelBuf) || !RelBuf)
         {
             continue;
         }
 
         File* RF = VfsOpen(__Path__, VFlgRDONLY);
-        if (!RF)
+        if (Probe_IF_Error(RF) || !RF)
         {
             KFree(RelBuf, Error);
             continue;
@@ -380,7 +462,7 @@ InstallModule(const char* __Path__)
             {
                 void* Ext = KexpLookup(Sym->Name);
                 S         = (uint64_t)Ext;
-                if (!Ext)
+                if (Probe_IF_Error(Ext) || !Ext)
                 {
                     continue;
                 }
@@ -438,22 +520,32 @@ InstallModule(const char* __Path__)
 
         KFree(RelBuf, Error);
     }
-    const __ElfSymbol__* InitSym = 0;
-    const __ElfSymbol__* ExitSym = 0;
+    const __ElfSymbol__* InitSym  = 0;
+    const __ElfSymbol__* ExitSym  = 0;
+    const __ElfSymbol__* ProbeSym = 0;
 
     for (long I = 0; I < SymCount; I++)
     {
+        /*init*/
         if (Syms[I].Name && strcmp(Syms[I].Name, "module_init") == Nothing)
         {
             InitSym = &Syms[I];
         }
 
+        /*exit*/
         else if (Syms[I].Name && strcmp(Syms[I].Name, "module_exit") == Nothing)
         {
             ExitSym = &Syms[I];
         }
+
+        /*probe*/
+        else if (Syms[I].Name && strcmp(Syms[I].Name, "module_probe") ==
+                                     Nothing) /*For polling and probemgr may handle it*/
+        {
+            ProbeSym = &Syms[I];
+        }
     }
-    if (!InitSym)
+    if (Probe_IF_Error(InitSym) || !InitSym)
     {
         for (long J = 0; J < ShNum; J++)
         {
@@ -462,7 +554,17 @@ InstallModule(const char* __Path__)
                 long SzJ = (long)ShTbl[J].sh_size;
                 if (SzJ > 0)
                 {
-                    ModFree(SectionBases[J], (size_t)SzJ, Error);
+                    size_t   PgJ = (size_t)((SzJ + PageSize - 1) / PageSize);
+                    uint64_t VaJ = (uint64_t)SectionBases[J];
+                    for (size_t off = 0; off < PgJ * PageSize; off += PageSize)
+                    {
+                        uint64_t PaJ = GetPhysicalAddress(Vmm.KernelSpace, VaJ + off);
+                        UnmapPage(Vmm.KernelSpace, VaJ + off);
+                        if (PaJ)
+                        {
+                            FreePage(PaJ, Error);
+                        }
+                    }
                 }
             }
         }
@@ -476,7 +578,9 @@ InstallModule(const char* __Path__)
 
     void (*InitFn)(void) = 0;
     void (*ExitFn)(void) = 0;
+    int (*ProbeFn)(void) = 0;
 
+    /*init*/
     if (InitSym->ResolvedAddr)
     {
         InitFn = (void (*)(void))(uintptr_t)InitSym->ResolvedAddr;
@@ -489,6 +593,7 @@ InstallModule(const char* __Path__)
         InitFn = (void (*)(void))(Base ? (Base + InitSym->Value) : (uint8_t*)InitSym->Value);
     }
 
+    /*exit*/
     if (ExitSym)
     {
         if (ExitSym->ResolvedAddr)
@@ -505,10 +610,27 @@ InstallModule(const char* __Path__)
         }
     }
 
-    InitFn();
+    /*probe*/
+    if (ProbeSym)
+    {
+        if (ProbeSym->ResolvedAddr)
+        {
+            ProbeFn = (int (*)(void))(uintptr_t)ProbeSym->ResolvedAddr;
+        }
+        else
+        {
+            uint8_t* BaseP =
+                (uint8_t*)((ProbeSym->Shndx < (uint16_t)ShNum) ? SectionBases[ProbeSym->Shndx]
+                                                               : Nothing);
+            ProbeFn =
+                (int (*)(void))(BaseP ? (BaseP + ProbeSym->Value) : (uint8_t*)ProbeSym->Value);
+        }
+    }
+
+    /*InitFn();*/ // No need for calling it here, DriverManager handles it
 
     ModuleRecord* Rec = (ModuleRecord*)KMalloc(sizeof(ModuleRecord));
-    if (!Rec)
+    if (Probe_IF_Error(Rec) || !Rec)
     {
         /*its fine*/
         return SysOkay;
@@ -523,7 +645,8 @@ InstallModule(const char* __Path__)
     Rec->SectionCount = ShNum;
     Rec->ZeroStub     = ZeroStub;
     Rec->InitFn       = InitFn;
-    Rec->ExitFn       = ExitFn; /* now resolved if present */
+    Rec->ExitFn       = ExitFn;
+    Rec->ProbeFn      = ProbeFn;
     Rec->RefCount     = 1;
     Rec->Next         = 0;
 
@@ -535,13 +658,13 @@ InstallModule(const char* __Path__)
 int
 UnInstallModule(const char* __Path__)
 {
-    if (!__Path__)
+    if (Probe_IF_Error(__Path__) || !__Path__)
     {
         return -BadArgs;
     }
 
     ModuleRecord* Rec = ModuleRegistryFind(__Path__);
-    if (!Rec)
+    if (Probe_IF_Error(Rec) || !Rec)
     {
         return -NotRecorded;
     }
@@ -551,10 +674,12 @@ UnInstallModule(const char* __Path__)
         return -Busy;
     }
 
+    /*
     if (Rec->ExitFn)
     {
         Rec->ExitFn();
     }
+    */ // DriverManager handles it
 
     SysErr  err;
     SysErr* Error = &err;
@@ -566,7 +691,17 @@ UnInstallModule(const char* __Path__)
             long Sz = (long)Rec->ShTbl[I].sh_size;
             if (Sz > 0)
             {
-                ModFree(Rec->SectionBases[I], (size_t)Sz, Error);
+                size_t   Pages = (size_t)((Sz + PageSize - 1) / PageSize);
+                uint64_t Va    = (uint64_t)Rec->SectionBases[I];
+                for (size_t off = 0; off < Pages * PageSize; off += PageSize)
+                {
+                    uint64_t Pa = GetPhysicalAddress(Vmm.KernelSpace, Va + off);
+                    UnmapPage(Vmm.KernelSpace, Va + off);
+                    if (Pa)
+                    {
+                        FreePage(Pa, Error);
+                    }
+                }
             }
         }
     }

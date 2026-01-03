@@ -5,7 +5,7 @@ static int
 BlkDiskOpen(void* __Ctx__)
 {
     BlockDisk* D = (BlockDisk*)__Ctx__;
-    if (!D)
+    if (Probe_IF_Error(D) || !D)
     {
         return -BadEntity;
     }
@@ -20,7 +20,7 @@ static int
 BlkDiskClose(void* __Ctx__)
 {
     BlockDisk* D = (BlockDisk*)__Ctx__;
-    if (!D)
+    if (Probe_IF_Error(D) || !D)
     {
         return -BadEntity;
     }
@@ -36,7 +36,7 @@ BlkDiskReadBlocks(void* __Ctx__, uint64_t __Lba__, void* __Buf__, long __Count__
 {
     BlockDisk* D = (BlockDisk*)__Ctx__;
 
-    if (!D || !__Buf__ || __Count__ <= 0)
+    if (Probe_IF_Error(D) || !D || Probe_IF_Error(__Buf__) || !__Buf__ || __Count__ <= 0)
     {
         return Nothing;
     }
@@ -44,7 +44,7 @@ BlkDiskReadBlocks(void* __Ctx__, uint64_t __Lba__, void* __Buf__, long __Count__
     {
         return Nothing;
     }
-    if (!D->Ops.ReadBlocks || !D->CtrlCtx)
+    if (!D->Ops.ReadBlocks || Probe_IF_Error(D->CtrlCtx) || !D->CtrlCtx)
     {
         return Nothing;
     }
@@ -61,7 +61,7 @@ BlkDiskWriteBlocks(void* __Ctx__, uint64_t __Lba__, const void* __Buf__, long __
 {
     BlockDisk* D = (BlockDisk*)__Ctx__;
 
-    if (!D || !__Buf__ || __Count__ <= 0)
+    if (Probe_IF_Error(D) || !D || Probe_IF_Error(__Buf__) || !__Buf__ || __Count__ <= 0)
     {
         return Nothing;
     }
@@ -69,7 +69,7 @@ BlkDiskWriteBlocks(void* __Ctx__, uint64_t __Lba__, const void* __Buf__, long __
     {
         return Nothing;
     }
-    if (!D->Ops.WriteBlocks || !D->CtrlCtx)
+    if (!D->Ops.WriteBlocks || Probe_IF_Error(D->CtrlCtx) || !D->CtrlCtx)
     {
         return Nothing;
     }
@@ -85,11 +85,11 @@ static int
 BlkDiskIoctl(void* __Ctx__, unsigned long __Cmd__, void* __Arg__)
 {
     BlockDisk* D = (BlockDisk*)__Ctx__;
-    if (!D)
+    if (Probe_IF_Error(D) || !D)
     {
         return -BadEntity;
     }
-    if (!D->Ops.Ioctl || !D->CtrlCtx)
+    if (!D->Ops.Ioctl || Probe_IF_Error(D->CtrlCtx) || !D->CtrlCtx)
     {
         return SysOkay;
     }
@@ -100,7 +100,7 @@ static int
 BlkPartOpen(void* __Ctx__)
 {
     BlockPart* P = (BlockPart*)__Ctx__;
-    if (!P || !P->Parent)
+    if (Probe_IF_Error(P) || !P || Probe_IF_Error(P->Parent) || !P->Parent)
     {
         return -BadEntity;
     }
@@ -120,7 +120,8 @@ BlkPartReadBlocks(void* __Ctx__, uint64_t __Lba__, void* __Buf__, long __Count__
     BlockPart* P = (BlockPart*)__Ctx__;
     BlockDisk* D = P ? P->Parent : Nothing;
 
-    if (!P || !D || !__Buf__ || __Count__ <= 0)
+    if (Probe_IF_Error(P) || !P || Probe_IF_Error(D) || !D || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Count__ <= 0)
     {
         return Nothing;
     }
@@ -128,7 +129,7 @@ BlkPartReadBlocks(void* __Ctx__, uint64_t __Lba__, void* __Buf__, long __Count__
     {
         return Nothing;
     }
-    if (!D->Ops.ReadBlocks || !D->CtrlCtx)
+    if (!D->Ops.ReadBlocks || Probe_IF_Error(D->CtrlCtx) || !D->CtrlCtx)
     {
         return Nothing;
     }
@@ -147,7 +148,8 @@ BlkPartWriteBlocks(void* __Ctx__, uint64_t __Lba__, const void* __Buf__, long __
     BlockPart* P = (BlockPart*)__Ctx__;
     BlockDisk* D = P ? P->Parent : Nothing;
 
-    if (!P || !D || !__Buf__ || __Count__ <= 0)
+    if (Probe_IF_Error(P) || !P || Probe_IF_Error(D) || !D || Probe_IF_Error(__Buf__) || !__Buf__ ||
+        __Count__ <= 0)
     {
         return Nothing;
     }
@@ -155,7 +157,7 @@ BlkPartWriteBlocks(void* __Ctx__, uint64_t __Lba__, const void* __Buf__, long __
     {
         return Nothing;
     }
-    if (!D->Ops.WriteBlocks || !D->CtrlCtx)
+    if (!D->Ops.WriteBlocks || Probe_IF_Error(D->CtrlCtx) || !D->CtrlCtx)
     {
         return Nothing;
     }
@@ -172,7 +174,7 @@ static int
 BlkPartIoctl(void* __Ctx__, unsigned long __Cmd__, void* __Arg__)
 {
     BlockPart* P = (BlockPart*)__Ctx__;
-    if (!P)
+    if (Probe_IF_Error(P) || !P)
     {
         return -BadEntity;
     }
@@ -182,7 +184,8 @@ BlkPartIoctl(void* __Ctx__, unsigned long __Cmd__, void* __Arg__)
 int
 BlockRegisterDisk(BlockDisk* __Disk__)
 {
-    if (!__Disk__ || !__Disk__->Name || __Disk__->BlockSize <= 0)
+    if (Probe_IF_Error(__Disk__) || !__Disk__ || Probe_IF_Error(__Disk__->Name) ||
+        !__Disk__->Name || __Disk__->BlockSize <= 0)
     {
         return -BadArgs;
     }
@@ -222,7 +225,8 @@ BlockRegisterDisk(BlockDisk* __Disk__)
 int
 BlockRegisterPartition(BlockPart* __Part__)
 {
-    if (!__Part__ || !__Part__->Name || !__Part__->Parent)
+    if (Probe_IF_Error(__Part__) || !__Part__ || Probe_IF_Error(__Part__->Name) ||
+        !__Part__->Name || Probe_IF_Error(__Part__->Parent) || !__Part__->Parent)
     {
         return -BadArgs;
     }

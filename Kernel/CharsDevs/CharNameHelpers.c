@@ -3,7 +3,8 @@
 int
 CharMakeName(char* __Out__, long __Cap__, const char* __Prefix__, long __Index__)
 {
-    if (!__Out__ || !__Prefix__ || __Cap__ <= 0)
+    if (Probe_IF_Error(__Out__) || !__Out__ || Probe_IF_Error(__Prefix__) || !__Prefix__ ||
+        __Cap__ <= 0)
     {
         return -BadArgs;
     }

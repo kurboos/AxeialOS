@@ -30,29 +30,38 @@ Cflg := \
 -Wno-unused-variable \
 -O2 \
 -g \
--I../../KModLibs/Includes
+-I../../Kernel/KrnlLibs/Includes
 
 FinalTemp := ../.Build
 LocalTemp := .Build
 
-# name of module
-
+# Driver configuration
 ModuleName := NameMe.ko
+DriverType := system
+DriverSubType := 
+
+# Determine install path
+ifeq ($(DriverSubType),)
+    InstallPath := $(FinalTemp)/sys/drvs/$(DriverType)
+else
+    InstallPath := $(FinalTemp)/sys/drvs/$(DriverType)/$(DriverSubType)
+endif
 
 Cs := $(wildcard *.c)
 Os := $(patsubst %.c,$(LocalTemp)/%.o,$(Cs))
 
 .PHONY: all clean
 
-all: $(FinalTemp)/$(ModuleName)
+all: $(InstallPath)/$(ModuleName)
 
 $(LocalTemp)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(Compiler) $(Cflg) -c $< -o $@
-$(FinalTemp)/$(ModuleName): $(Os)
+
+$(InstallPath)/$(ModuleName): $(Os)
+	@mkdir -p $(InstallPath)
 	$(Compiler) -nostdlib -r -o $@ $(Os)
 
 clean:
 	@rm -rf $(LocalTemp)
-
-# submakefile for each subdir
+	@rm -f $(InstallPath)/$(ModuleName)

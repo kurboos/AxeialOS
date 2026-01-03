@@ -23,7 +23,7 @@ typedef struct
 /*linux-like idioms*/
 #define Error_TO_Pointer(__Code__) ((void*)(intptr_t)(__Code__))
 #define Pointer_TO_Error(__Ptr__)  ((int)(intptr_t)(__Ptr__))
-#define Probe_IF_Error(__Ptr__)    ((uintptr_t)(__Ptr__) >= (uintptr_t)(-4095))
+#define Probe_IF_Error(__Ptr__)    ((intptr_t)(__Ptr__) >= (intptr_t)(-4095))
 
 /*For bools or binary returns, syserro and sysokay work too*/
 

@@ -43,7 +43,7 @@ IsValidHhdmAddress(uint64_t __VirtAddr__)
 static int
 IsSafeToAccess(uint64_t* __Ptr__)
 {
-    if (!__Ptr__)
+    if (Probe_IF_Error(__Ptr__) || !__Ptr__)
     {
         return -BadArgs;
     }
@@ -56,7 +56,7 @@ IsSafeToAccess(uint64_t* __Ptr__)
 void
 VmmDumpSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
 {
-    if (!__Space__)
+    if (Probe_IF_Error(__Space__) || !__Space__)
     {
         SlotError(__Err__, -NotCanonical);
         return;
@@ -68,7 +68,8 @@ VmmDumpSpace(VirtualMemorySpace* __Space__, SysErr* __Err__)
         return;
     }
 
-    if (!__Space__->Pml4 || !IsValidHhdmAddress((uint64_t)__Space__->Pml4))
+    if (Probe_IF_Error(__Space__->Pml4) || !__Space__->Pml4 ||
+        !IsValidHhdmAddress((uint64_t)__Space__->Pml4))
     {
         SlotError(__Err__, -NotCanonical);
         return;

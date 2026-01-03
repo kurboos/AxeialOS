@@ -15,7 +15,7 @@ InitializeBootImage(void)
     for (uint64_t I = 0; I < LimineMod.response->module_count; I++)
     {
         struct limine_file* Mod = LimineMod.response->modules[I];
-        if (!Mod || !Mod->path)
+        if (Probe_IF_Error(Mod) || !Mod || Probe_IF_Error(Mod->path) || !Mod->path)
         {
             continue;
         }

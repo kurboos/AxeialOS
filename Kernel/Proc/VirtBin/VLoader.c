@@ -37,7 +37,7 @@ VirtMapRangeZeroed(VirtualMemorySpace* __Space__,
 {
     uint64_t Pages = (__Len__ + PageSize - 1) / PageSize;
     uint64_t Phys  = AllocPages(Pages);
-    if (!Phys)
+    if (Probe_IF_Error(Phys) || !Phys)
     {
         return -NotCanonical;
     }
@@ -71,7 +71,7 @@ __PushStrings__(VirtualMemorySpace* __Space__,
     uint64_t Cur     = AreaEnd;
     long     Count   = 0;
 
-    if (!__List__)
+    if (Probe_IF_Error(__List__) || !__List__)
     {
         return Nothing;
     }
@@ -97,12 +97,12 @@ static inline int
 __Write64__(VirtualMemorySpace* __Sp__, uint64_t __Va__, uint64_t __Val__)
 {
     uint64_t __Pa__ = GetPhysicalAddress(__Sp__, __Va__);
-    if (!__Pa__)
+    if (Probe_IF_Error(__Pa__) || !__Pa__)
     {
         return -NotCanonical;
     }
     uint64_t* __Ka__ = (uint64_t*)PhysToVirt(__Pa__);
-    if (!__Ka__)
+    if (Probe_IF_Error(__Ka__) || !__Ka__)
     {
         return -NotCanonical;
     }
@@ -134,7 +134,7 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
                int                 __Nx__,
                uint64_t*           __OutRsp__)
 {
-    if (!__Space__ || __Space__->PhysicalBase == 0)
+    if (Probe_IF_Error(__Space__) || !__Space__ || __Space__->PhysicalBase == 0)
     {
         return Nothing;
     }
@@ -336,7 +336,9 @@ VirtSetupStack(VirtualMemorySpace* __Space__,
 int
 VirtLoad(const VirtRequest* __Req__, VirtImage* __OutImg__)
 {
-    if (!__Req__ || !__Req__->File || !__OutImg__ || !__OutImg__->Space)
+    if (Probe_IF_Error(__Req__) || !__Req__ || Probe_IF_Error(__Req__->File) || !__Req__->File ||
+        Probe_IF_Error(__OutImg__) || !__OutImg__ || Probe_IF_Error(__OutImg__->Space) ||
+        !__OutImg__->Space)
     {
         return -BadArgs;
     }
@@ -353,13 +355,13 @@ VirtLoad(const VirtRequest* __Req__, VirtImage* __OutImg__)
     __OutImg__->Auxv.Len   = 0;
 
     const DynLoader* Ldr = DynLoaderSelect(__Req__->File);
-    if (!Ldr)
+    if (Probe_IF_Error(Ldr) || !Ldr)
     {
         return -NoSuch;
     }
 
     void* ImagePriv = KMalloc(4096);
-    if (!ImagePriv)
+    if (Probe_IF_Error(ImagePriv) || !ImagePriv)
     {
         return -BadAlloc;
     }
@@ -407,7 +409,7 @@ VirtLoad(const VirtRequest* __Req__, VirtImage* __OutImg__)
 int
 VirtCommit(VirtImage* __Img__)
 {
-    if (!__Img__ || !__Img__->Space)
+    if (Probe_IF_Error(__Img__) || !__Img__ || Probe_IF_Error(__Img__->Space) || !__Img__->Space)
     {
         return -BadArgs;
     }

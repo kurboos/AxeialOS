@@ -35,20 +35,31 @@ Cflg := \
 FinalTemp := ../.Build
 LocalTemp := .Build
 
-ModuleName := 2ELFLD.ko
+ModuleName := TestDriver.ko
+DriverType := system
+DriverSubType := 
+
+ifeq ($(DriverSubType),)
+    InstallPath := $(FinalTemp)/sys/drvs/$(DriverType)
+else
+    InstallPath := $(FinalTemp)/sys/drvs/$(DriverType)/$(DriverSubType)
+endif
 
 Cs := $(wildcard *.c)
 Os := $(patsubst %.c,$(LocalTemp)/%.o,$(Cs))
 
 .PHONY: all clean
 
-all: $(FinalTemp)/$(ModuleName)
+all: $(InstallPath)/$(ModuleName)
 
 $(LocalTemp)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(Compiler) $(Cflg) -c $< -o $@
-$(FinalTemp)/$(ModuleName): $(Os)
+
+$(InstallPath)/$(ModuleName): $(Os)
+	@mkdir -p $(InstallPath)
 	$(Compiler) -nostdlib -r -o $@ $(Os)
 
 clean:
 	@rm -rf $(LocalTemp)
+	@rm -f $(InstallPath)/$(ModuleName)

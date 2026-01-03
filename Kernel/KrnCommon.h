@@ -7,6 +7,7 @@
 #include <BootConsole.h>
 #include <BootImg.h>
 #include <DevFS.h>
+#include <DrvMgr.h>
 #include <EarlyBootFB.h>
 #include <GDT.h>
 #include <IDT.h>
@@ -39,3 +40,4 @@ extern bool InitComplete;
 
 /*TEST handles*/
 void __TEST__Proc(void);
+void __TEST__DriverManager(void);

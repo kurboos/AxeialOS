@@ -78,12 +78,17 @@ KernelWorkerThread(void* __Argument__)
     }
     else
     {
-        PciDumpAllDevices(Error);
+        /*Just if you wanna know*/
+        // PciDumpAllDevices(Error);
         InitComplete = true;
     }
 
+    /*Hardware*/
+    InitializeDriverManager();
+
     /*Testing*/
-    __TEST__Proc();
+    //__TEST__Proc();
+    __TEST__DriverManager(); /*Test NEW driver manager*/
 
     if (InitComplete == true)
     {

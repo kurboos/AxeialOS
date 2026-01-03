@@ -10,7 +10,7 @@ FirmRequest(FirmwareHandle**    __OutHandle__,
             const FirmwareDesc* __Desc__,
             const DeviceEntry*  __Dev__)
 {
-    if (!__OutHandle__ || !__Desc__)
+    if (Probe_IF_Error(__OutHandle__) || !__OutHandle__ || Probe_IF_Error(__Desc__) || !__Desc__)
     {
         return -BadArgs;
     }
@@ -19,7 +19,7 @@ FirmRequest(FirmwareHandle**    __OutHandle__,
     SysErr* Error = &err;
 
     FirmwareHandle* H = (FirmwareHandle*)KMalloc(sizeof(FirmwareHandle));
-    if (!H)
+    if (Probe_IF_Error(H) || !H)
     {
         return -BadAlloc;
     }
@@ -37,7 +37,7 @@ FirmRequest(FirmwareHandle**    __OutHandle__,
     }
 
     File* F = VfsOpen(PathBuf, VFlgRDONLY);
-    if (!F)
+    if (Probe_IF_Error(F) || !F)
     {
         KFree(H, Error);
         *__OutHandle__ = 0;
@@ -54,7 +54,7 @@ FirmRequest(FirmwareHandle**    __OutHandle__,
     }
 
     unsigned char* Buf = (unsigned char*)KMalloc((size_t)St.Size);
-    if (!Buf)
+    if (Probe_IF_Error(Buf) || !Buf)
     {
         VfsClose(F);
         KFree(H, Error);
@@ -86,7 +86,7 @@ FirmRelease(FirmwareHandle* __Handle__)
 {
     SysErr  err;
     SysErr* Error = &err;
-    if (!__Handle__)
+    if (Probe_IF_Error(__Handle__) || !__Handle__)
     {
         return SysOkay; /*already released*/
     }

@@ -14,12 +14,9 @@ LoadDriver(const char* __DriverName__)
         return -BadArgs;
     }
 
-    PDebug("Looking for driver '%s'\n", __DriverName__);
-
     DriverEntry* Driver = FindDriverByName(__DriverName__);
     if (Probe_IF_Error(Driver))
     {
-        PError("Driver '%s' not found in registry\n", __DriverName__);
         return -NoSuch;
     }
 
@@ -27,7 +24,7 @@ LoadDriver(const char* __DriverName__)
 
     if (Driver->State == DriverStateLoaded || Driver->State == DriverStateActive)
     {
-        PError("Driver '%s' already loaded\n", __DriverName__);
+        PWarn("Driver '%s' already loaded\n", __DriverName__);
         return -Redefined;
     }
 
@@ -35,12 +32,10 @@ LoadDriver(const char* __DriverName__)
     PDebug("Loading module for '%s'\n", __DriverName__);
 
     int Result = LoadDriverModule(Driver);
-    PDebug("LoadDriverModule returned %d\n", Result);
 
     if (Result != SysOkay)
     {
         Driver->State = DriverStateFailed;
-        PError("Failed to load module for '%s': %d\n", __DriverName__, Result);
         return Result;
     }
 
@@ -107,18 +102,15 @@ LoadDriverModule(DriverEntry* __Driver__)
 {
     if (Probe_IF_Error(__Driver__) || !__Driver__)
     {
-        PError("Bad driver pointer\n");
         return -BadArgs;
     }
 
     PDebug("Installing module from '%s'\n", __Driver__->Info.FilePath);
 
     int Result = InstallModule(__Driver__->Info.FilePath);
-    PDebug("InstallModule returned %d\n", Result);
 
     if (Result != SysOkay)
     {
-        PError("InstallModule failed for '%s': %d\n", __Driver__->Info.FilePath, Result);
         return Result;
     }
 
@@ -127,23 +119,18 @@ LoadDriverModule(DriverEntry* __Driver__)
     ModuleRecord* Module = ModuleRegistryFind(__Driver__->Info.FilePath);
     if (Probe_IF_Error(Module))
     {
-        PError("Module record not found after install: %d\n", Pointer_TO_Error(Module));
         UnInstallModule(__Driver__->Info.FilePath);
         return -NoSuch;
     }
 
-    PDebug("Module record found, setting handle\n");
     __Driver__->Info.ModuleHandle = Module;
 
     if (Module->ProbeFn)
     {
-        PDebug("Calling probe function\n");
         int ProbeResult = Module->ProbeFn();
-        PDebug("Probe function returned %d\n", ProbeResult);
 
         if (ProbeResult != SysOkay)
         {
-            PError("Probe failed: %d\n", ProbeResult);
             UnInstallModule(__Driver__->Info.FilePath);
             __Driver__->Info.ModuleHandle = NULL;
             return ProbeResult;
@@ -151,7 +138,7 @@ LoadDriverModule(DriverEntry* __Driver__)
     }
     else
     {
-        PDebug("No probe function found\n");
+        PWarn("No probe function found\n");
     }
 
     PDebug("Successfully loaded module\n");
@@ -172,6 +159,7 @@ UnloadDriverModule(DriverEntry* __Driver__)
         __Driver__->Info.ModuleHandle = NULL;
     }
 
+    PDebug("Successfully unloaded module\n");
     return Result;
 }
 

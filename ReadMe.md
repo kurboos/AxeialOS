@@ -84,5 +84,5 @@ You are free to experiment on this operating system as much as you want
 
 DRIVER NOTE: All drivers/kernel modules(.ko) have been deprecated because of the kernel rewrite! Will be fixed after the driver overhaul.
 
-if more intreasted join my community! 
+join my community! 
 https://discord.gg/dEPMKfktBt

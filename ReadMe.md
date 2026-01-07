@@ -46,7 +46,7 @@ for .iso
 ./Run.sh iso
 ```
 
-Another note: also incase using the './' prifix doesnt work for the script use 'sh' cmdlet like:
+Another note: also incase using the './' prefix does not work when using the the script use 'sh' cmdlet for example:
 
 ```
 sh Build.sh

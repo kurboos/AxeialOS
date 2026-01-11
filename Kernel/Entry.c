@@ -2,7 +2,7 @@
 #include <Errnos.h>
 
 
-// Uncomment this for the early-spash.
+// Uncomment this for the early-splash.
 // #define EarlySplash
 
 /** Devs */
